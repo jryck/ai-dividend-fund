@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Dividend Fund — Endowment Monte Carlo</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a212b; --panel2:#222c38; --line:#2c3a49;
+    --ink:#e6edf3; --muted:#9fb0c0; --accent:#4aa8ff; --accent2:#ffb454;
+    --good:#52c41a; --bad:#ff6b6b;
+    --ai:#b45cff; --real:#4aa8ff; --res:#7ee0c0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:19px;font-weight:650;letter-spacing:.2px}
+  header p{margin:4px 0 0;color:var(--muted);font-size:12.5px}
+  .layout{display:flex;align-items:flex-start;gap:0}
+  /* ---- controls ---- */
+  #controls{width:330px;min-width:330px;padding:16px 18px;border-right:1px solid var(--line);
+    height:calc(100vh - 64px);overflow-y:auto;background:var(--panel)}
+  .group{margin-bottom:18px}
+  .group h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;
+    color:var(--accent);font-weight:700}
+  .field{margin-bottom:10px}
+  .field .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+  .field label{color:var(--muted);font-size:12.5px}
+  .field .val{font-variant-numeric:tabular-nums;font-weight:600;font-size:12.5px}
+  .field input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+  .field input[type=number]{width:74px;background:var(--panel2);border:1px solid var(--line);
+    color:var(--ink);border-radius:6px;padding:3px 6px;font-size:12.5px}
+  select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:6px;padding:5px 6px;font-size:12.5px}
+  .alloc-readout{display:flex;gap:6px;margin-top:6px}
+  .chip{flex:1;text-align:center;padding:5px 4px;border-radius:6px;font-size:11.5px;font-weight:600}
+  .chip.ai{background:rgba(180,92,255,.18);color:#d6a8ff}
+  .chip.real{background:rgba(74,168,255,.18);color:#9fd0ff}
+  .chip.res{background:rgba(126,224,192,.18);color:#aef0dc}
+  .btn{width:100%;padding:9px;border:none;border-radius:8px;background:var(--accent);
+    color:#06223f;font-weight:700;cursor:pointer;font-size:13px;margin-top:4px}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  /* ---- main ---- */
+  main{flex:1;padding:16px 22px;height:calc(100vh - 64px);overflow-y:auto}
+  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tab{padding:7px 16px;border-radius:8px;background:var(--panel);border:1px solid var(--line);
+    cursor:pointer;font-weight:600;font-size:13px;color:var(--muted)}
+  .tab.active{background:var(--accent);color:#06223f;border-color:var(--accent)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+  .card .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  .card .v{font-size:21px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+  .card .s{color:var(--muted);font-size:11px;margin-top:1px}
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .chart h4{margin:0 0 8px;font-size:13px;font-weight:600}
+  .chart canvas{width:100%;display:block}
+  .full{grid-column:1 / -1}
+  .note{color:var(--muted);font-size:11.5px;margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+  th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  .hidden{display:none}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:6px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+  #sweepStatus{color:var(--muted);font-size:12.5px;margin-left:10px}
+  #refEditor input{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:3px 6px;font-size:12px}
+  #refEditor table th,#refEditor table td{padding:4px 6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Dividend Fund — Endowment Monte Carlo</h1>
+  <p>Three buckets · correlated lognormal returns · annual rebalancing · smoothed spending. All math runs locally in your browser.</p>
+</header>
+
+<div class="layout">
+  <aside id="controls"><!-- controls injected by JS --></aside>
+
+  <main>
+    <div class="tabs">
+      <div class="tab active" data-tab="explorer">Explorer</div>
+      <div class="tab" data-tab="sweep">Allocation Sweep</div>
+    </div>
+
+    <!-- EXPLORER -->
+    <section id="explorer">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+        <button class="btn ghost" style="width:auto;padding:6px 13px" id="dlProj">⬇ Download projection (Excel/CSV)</button>
+      </div>
+      <div class="cards" id="statCards"></div>
+      <div style="margin:2px 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--bad);font-weight:700">Downside risk over the horizon</div>
+      <div class="cards" id="riskCards"></div>
+      <div class="charts">
+        <div class="chart full">
+          <h4>Corpus over time — real $B (percentile fan)</h4>
+          <canvas id="fanChart" height="300"></canvas>
+          <div class="legend">
+            <span><i class="sw" style="background:rgba(74,168,255,.5)"></i>5th–95th pct</span>
+            <span><i class="sw" style="background:rgba(74,168,255,.85)"></i>25th–75th pct</span>
+            <span><i class="sw" style="background:#fff"></i>median</span>
+            <span><i class="sw" style="background:var(--accent2)"></i>starting corpus</span>
+          </div>
+        </div>
+        <div class="chart">
+          <h4>Annual distribution — nominal $B (percentile fan)</h4>
+          <canvas id="payoutChart" height="260"></canvas>
+        </div>
+        <div class="chart">
+          <h4>Terminal corpus distribution — real $B</h4>
+          <canvas id="histChart" height="260"></canvas>
+        </div>
+      </div>
+      <p class="note" id="explorerNote"></p>
+    </section>
+
+    <!-- SWEEP -->
+    <section id="sweep" class="hidden">
+      <div style="display:flex;align-items:center;margin-bottom:12px">
+        <button class="btn" style="width:auto;padding:9px 18px" id="runSweep">Run allocation sweep</button>
+        <button class="btn ghost" style="width:auto;padding:9px 14px;margin-left:8px" id="dlGrid">⬇ Grid → Excel/CSV</button>
+        <span id="sweepStatus">Tests every allocation on the grid against one shared set of futures.</span>
+      </div>
+      <div id="sweepBest"></div>
+      <div id="refEditor"></div>
+      <div id="refResults"></div>
+      <div class="charts">
+        <div class="chart full">
+          <h4>The endowment tradeoff — lifetime payout vs. preserving real value</h4>
+          <canvas id="frontierChart" height="320"></canvas>
+          <p class="note">Each dot is one allocation. Color = AI weight (purple→yellow). Up-and-right is better: pays more over its life <em>and</em> more likely to keep its real value.</p>
+        </div>
+        <div class="chart">
+          <h4>Median terminal corpus — real $B</h4>
+          <canvas id="heat1" height="300"></canvas>
+        </div>
+        <div class="chart">
+          <h4 style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <span>Risk surface</span>
+            <select id="riskMetric" style="width:auto;font-size:11px;padding:3px 6px">
+              <option value="preserve">Preserve real value (higher better)</option>
+              <option value="cut">Cut distributions — probability</option>
+              <option value="cutDepth">Worst cut depth — median</option>
+              <option value="cap">Capital impairment — probability</option>
+              <option value="sev">Severe impairment — probability</option>
+            </select>
+          </h4>
+          <canvas id="heat2" height="300"></canvas>
+        </div>
+      </div>
+      <p class="note">Heatmaps: x-axis = AI weight, y-axis = Reserve weight, Real Economy = remainder. Brighter = higher. ★ marks the best cell.</p>
+    </section>
+  </main>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   PARAMETER DEFINITIONS  (drive the control panel)
+   ========================================================================= */
+const GROUPS = [
+  {title:"Allocation (target weights)", fields:[
+    {key:"wAI",   label:"AI bucket",      min:0, max:100, step:1, def:40, unit:"%"},
+    {key:"wRes",  label:"Reserve bucket", min:0, max:100, step:1, def:20, unit:"%"},
+  ], allocReadout:true},
+  {title:"Market assumptions", fields:[
+    {key:"mAI",  label:"AI — mean return",   min:0,  max:30, step:0.5, def:13, unit:"%"},
+    {key:"vAI",  label:"AI — volatility",    min:1,  max:60, step:0.5, def:30, unit:"%"},
+    {key:"mReal",label:"Real — mean return", min:0,  max:20, step:0.5, def:7,  unit:"%"},
+    {key:"vReal",label:"Real — volatility",  min:1,  max:40, step:0.5, def:13, unit:"%"},
+    {key:"mRes", label:"Reserve — mean",     min:0,  max:10, step:0.25,def:2,  unit:"%"},
+    {key:"vRes", label:"Reserve — volatility",min:0.5,max:15,step:0.25,def:2,  unit:"%"},
+  ]},
+  {title:"Correlations", fields:[
+    {key:"cAR", label:"AI ↔ Real",     min:-1, max:1, step:0.05, def:0.45, unit:""},
+    {key:"cAS", label:"AI ↔ Reserve",  min:-1, max:1, step:0.05, def:0.00, unit:""},
+    {key:"cRS", label:"Real ↔ Reserve",min:-1, max:1, step:0.05, def:0.10, unit:""},
+  ]},
+  {title:"Endowment terms", fields:[
+    {key:"corpus",  label:"Starting corpus", min:0.5, max:50, step:0.5, def:5,  unit:"$B"},
+    {key:"horizon", label:"Time horizon",    min:5,   max:50, step:1,   def:25, unit:"yr"},
+  ]},
+  {title:"Spending rule", fields:[
+    {key:"baseRate", label:"Base spend rate", min:0, max:8,  step:0.1,  def:2.5, unit:"%"},
+    {key:"smoothing",label:"Smoothing weight",min:0, max:0.95,step:0.05,def:0.70,unit:""},
+  ]},
+  {title:"Other", fields:[
+    {key:"inflation",label:"Inflation",   min:0, max:6, step:0.25, def:0, unit:"%"},
+    {key:"fee",      label:"Annual fee",  min:0, max:2, step:0.05, def:0, unit:"%"},
+  ]},
+];
+const SIM_OPTS = {
+  explorerSims:[{v:2000,t:"2,000 (fastest)"},{v:5000,t:"5,000"},{v:10000,t:"10,000 (default)"},{v:25000,t:"25,000 (slow)"}],
+  sweepSims:[{v:1000,t:"1,000 (fast)"},{v:2000,t:"2,000 (default)"},{v:5000,t:"5,000 (slow)"}],
+  gridStep:[{v:5,t:"5% — fine (231)"},{v:10,t:"10% — coarse (66)"},{v:20,t:"20% — quick (21)"}],
+};
+
+// Fixed allocations always shown head-to-head in the sweep (AI / Real / Reserve).
+const REFERENCE_ALLOCS=[
+  {name:"All AI",          w:[1.00,0.00,0.00]},
+  {name:"Half AI",         w:[0.50,0.30,0.20]},
+  {name:"Balanced",        w:[0.40,0.40,0.20]},
+  {name:"Conservative",    w:[0.30,0.60,0.10]},
+  {name:"No AI",           w:[0.00,0.70,0.30]},
+];
+// Mutable, user-editable copy (stored as AI% and Reserve%; Real = remainder).
+let refAllocs = REFERENCE_ALLOCS.map(o=>({name:o.name, ai:o.w[0]*100, res:o.w[2]*100}));
+function refWeights(ai,res){
+  let a=ai/100, s=res/100, r=Math.max(0,1-a-s);
+  const sum=a+r+s||1; return [a/sum, r/sum, s/sum];
+}
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const state = {};
+GROUPS.forEach(g=>g.fields.forEach(f=>state[f.key]=f.def));
+state.explorerSims = 10000;
+state.sweepSims    = 2000;
+state.gridStep     = 10;
+state.seed         = 42;
+
+/* =========================================================================
+   ENGINE  (pure functions — no DOM)
+   ========================================================================= */
+function mulberry32(a){
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    let t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+function normalGen(rng){
+  let cache=null;
+  return function(){
+    if(cache!==null){const v=cache;cache=null;return v;}
+    let u=0,v=0;
+    while(u===0)u=rng();
+    while(v===0)v=rng();
+    const r=Math.sqrt(-2*Math.log(u)), th=2*Math.PI*v;
+    cache=r*Math.sin(th);
+    return r*Math.cos(th);
+  };
+}
+function cholesky3(A){
+  const L=[[0,0,0],[0,0,0],[0,0,0]];
+  L[0][0]=Math.sqrt(A[0][0]);
+  L[1][0]=A[1][0]/L[0][0];
+  L[2][0]=A[2][0]/L[0][0];
+  L[1][1]=Math.sqrt(Math.max(A[1][1]-L[1][0]**2,1e-12));
+  L[2][1]=(A[2][1]-L[2][0]*L[1][0])/L[1][1];
+  L[2][2]=Math.sqrt(Math.max(A[2][2]-L[2][0]**2-L[2][1]**2,1e-12));
+  return L;
+}
+// Calibrate lognormal so LEVEL return hits target mean & vol.
+function calibrate(means, vols){
+  const mu=[],sg=[];
+  for(let i=0;i<3;i++){
+    const s2=Math.log(1+(vols[i]**2)/((1+means[i])**2));
+    sg[i]=Math.sqrt(s2);
+    mu[i]=Math.log(1+means[i])-0.5*s2;
+  }
+  return {mu,sg};
+}
+// Generate gross returns (1+r): Float64Array length nSims*years*3
+function genReturns(nSims, years, means, vols, corr, seed){
+  const {mu,sg}=calibrate(means,vols);
+  const cov=[[0,0,0],[0,0,0],[0,0,0]];
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++)cov[i][j]=corr[i][j]*sg[i]*sg[j];
+  const L=cholesky3(cov);
+  const rng=mulberry32(seed>>>0);
+  const nrm=normalGen(rng);
+  const out=new Float64Array(nSims*years*3);
+  for(let k=0;k<nSims*years;k++){
+    const z0=nrm(),z1=nrm(),z2=nrm();
+    const x0=mu[0]+L[0][0]*z0;
+    const x1=mu[1]+L[1][0]*z0+L[1][1]*z1;
+    const x2=mu[2]+L[2][0]*z0+L[2][1]*z1+L[2][2]*z2;
+    const b=k*3;
+    out[b]=Math.exp(x0); out[b+1]=Math.exp(x1); out[b+2]=Math.exp(x2);
+  }
+  return out;
+}
+// Simulate all paths for one allocation.
+function simulate(weights, gross, nSims, years, p, record){
+  const wA=weights[0], wR=weights[1], wS=weights[2];
+  const start=p.corpus, baseRate=p.baseRate, sm=p.smoothing, infl=p.inflation, fee=p.fee;
+  const feeMul=1-fee, defl=Math.pow(1+infl,years);
+  const termReal=new Float64Array(nSims), payTot=new Float64Array(nSims);
+  const dep=new Uint8Array(nSims);
+  const distCut=new Uint8Array(nSims), capImp=new Uint8Array(nSims), sevImp=new Uint8Array(nSims);
+  const maxCutDepth=new Float64Array(nSims);
+  let totByYear=null, payByYear=null;
+  if(record){
+    totByYear=[]; for(let t=0;t<=years;t++)totByYear.push(new Float64Array(nSims));
+    payByYear=[]; for(let t=0;t<years;t++)payByYear.push(new Float64Array(nSims));
+  }
+  for(let s=0;s<nSims;s++){
+    let vA=start*wA, vR=start*wR, vS=start*wS;
+    let distPrev=baseRate*start, paySum=0, everDep=false;
+    let distHWM=baseRate*start, corpHWM=start, cut=false, sev=false, worstCut=0;
+    if(record)totByYear[0][s]=start;
+    const base=s*years*3;
+    for(let t=0;t<years;t++){
+      const b=base+t*3;
+      vA*=gross[b]; vR*=gross[b+1]; vS*=gross[b+2];
+      if(fee>0){vA*=feeMul; vR*=feeMul; vS*=feeMul;}
+      const total=vA+vR+vS;
+      let spend=sm*distPrev*(1+infl)+(1-sm)*baseRate*total;
+      if(spend>total)spend=total;
+      if(spend<0)spend=0;
+      if(spend<distHWM){
+        const dd=(distHWM-spend)/distHWM;      // depth of dip below prior peak
+        if(dd>worstCut)worstCut=dd;
+        if(spend<0.75*distHWM)cut=true;        // a "cut" = >25% below the peak
+      } else { distHWM=spend; }
+      const rem=total-spend;
+      if(rem<=0)everDep=true;
+      if(rem<0.5*corpHWM)sev=true;             // corpus drawdown >50% from peak
+      if(rem>corpHWM)corpHWM=rem;
+      vA=rem*wA; vR=rem*wR; vS=rem*wS;
+      distPrev=spend; paySum+=spend;
+      if(record){ totByYear[t+1][s]=rem/Math.pow(1+infl,t+1); payByYear[t][s]=spend; }
+    }
+    const endNom=vA+vR+vS;
+    termReal[s]=endNom/defl;
+    payTot[s]=paySum;
+    dep[s]=everDep?1:0;
+    distCut[s]=cut?1:0;
+    capImp[s]=endNom<start?1:0;                 // nominal ending below starting
+    sevImp[s]=sev?1:0;
+    maxCutDepth[s]=worstCut;                     // deepest payout dip below prior peak
+  }
+  return {termReal,payTot,dep,distCut,capImp,sevImp,maxCutDepth,totByYear,payByYear};
+}
+function pct(sorted,q){
+  if(sorted.length===0)return 0;
+  const i=(sorted.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i);
+  if(lo===hi)return sorted[lo];
+  return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);
+}
+function sortedCopy(arr){const a=Float64Array.from(arr);a.sort();return a;}
+
+/* =========================================================================
+   NORMALIZED WEIGHTS  (AI, Reserve sliders; Real = remainder)
+   ========================================================================= */
+function weights(){
+  let a=state.wAI/100, s=state.wRes/100;
+  let r=Math.max(0,1-a-s);
+  const sum=a+r+s || 1;
+  return [a/sum, r/sum, s/sum];
+}
+
+/* =========================================================================
+   CONTROL PANEL
+   ========================================================================= */
+function fmtVal(f,v){
+  if(f.unit==="%")return v+"%";
+  if(f.unit==="$B")return "$"+v+"B";
+  if(f.unit==="yr")return v+" yr";
+  if(f.unit==="")return Number(v).toFixed(2);
+  return v;
+}
+function buildControls(){
+  const root=document.getElementById("controls");
+  GROUPS.forEach(g=>{
+    const div=document.createElement("div"); div.className="group";
+    div.innerHTML=`<h3>${g.title}</h3>`;
+    g.fields.forEach(f=>{
+      const wrap=document.createElement("div"); wrap.className="field";
+      wrap.innerHTML=`
+        <div class="row">
+          <label>${f.label}</label>
+          <span class="val" id="v_${f.key}">${fmtVal(f,state[f.key])}</span>
+        </div>
+        <input type="range" id="r_${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${state[f.key]}">`;
+      div.appendChild(wrap);
+      const range=wrap.querySelector("input");
+      range.addEventListener("input",()=>{
+        state[f.key]=parseFloat(range.value);
+        document.getElementById("v_"+f.key).textContent=fmtVal(f,state[f.key]);
+        if(g.allocReadout)updateAllocReadout();
+        scheduleExplorer();
+      });
+    });
+    if(g.allocReadout){
+      const ro=document.createElement("div"); ro.className="alloc-readout"; ro.id="allocReadout";
+      div.appendChild(ro);
+    }
+    root.appendChild(div);
+  });
+  // simulation settings
+  const simDiv=document.createElement("div"); simDiv.className="group";
+  simDiv.innerHTML="<h3>Simulation</h3>";
+  const mkSelect=(key,label,opts)=>{
+    const w=document.createElement("div"); w.className="field";
+    w.innerHTML=`<div class="row"><label>${label}</label></div>`;
+    const sel=document.createElement("select");
+    opts.forEach(o=>{const op=document.createElement("option");op.value=o.v;op.textContent=o.t;if(o.v===state[key])op.selected=true;sel.appendChild(op);});
+    sel.addEventListener("change",()=>{state[key]=parseInt(sel.value);if(key==="explorerSims")scheduleExplorer();});
+    w.appendChild(sel); simDiv.appendChild(w);
+  };
+  mkSelect("explorerSims","Explorer simulations",SIM_OPTS.explorerSims);
+  mkSelect("sweepSims","Sweep simulations",SIM_OPTS.sweepSims);
+  mkSelect("gridStep","Sweep grid resolution",SIM_OPTS.gridStep);
+  const seedField=document.createElement("div"); seedField.className="field";
+  seedField.innerHTML=`<div class="row"><label>Random seed</label>
+    <input type="number" id="seedInput" value="${state.seed}" style="width:90px"></div>`;
+  seedField.querySelector("input").addEventListener("input",e=>{state.seed=parseInt(e.target.value)||0;scheduleExplorer();});
+  simDiv.appendChild(seedField);
+  const reset=document.createElement("button"); reset.className="btn ghost"; reset.textContent="Reset to defaults";
+  reset.addEventListener("click",resetDefaults);
+  simDiv.appendChild(reset);
+  root.appendChild(simDiv);
+  updateAllocReadout();
+}
+function updateAllocReadout(){
+  const w=weights();
+  document.getElementById("allocReadout").innerHTML=
+    `<div class="chip ai">AI ${(w[0]*100).toFixed(0)}%</div>
+     <div class="chip real">Real ${(w[1]*100).toFixed(0)}%</div>
+     <div class="chip res">Reserve ${(w[2]*100).toFixed(0)}%</div>`;
+}
+function resetDefaults(){
+  GROUPS.forEach(g=>g.fields.forEach(f=>{
+    state[f.key]=f.def;
+    document.getElementById("r_"+f.key).value=f.def;
+    document.getElementById("v_"+f.key).textContent=fmtVal(f,f.def);
+  }));
+  updateAllocReadout(); runExplorer();
+}
+
+/* =========================================================================
+   PARAM PACK  (convert UI % values to engine units)
+   ========================================================================= */
+function engineParams(){
+  return {
+    corpus:state.corpus*1e9, baseRate:state.baseRate/100, smoothing:state.smoothing,
+    inflation:state.inflation/100, fee:state.fee/100,
+  };
+}
+function marketArrays(){
+  const means=[state.mAI/100,state.mReal/100,state.mRes/100];
+  const vols =[state.vAI/100,state.vReal/100,state.vRes/100];
+  const corr=[
+    [1,state.cAR,state.cAS],
+    [state.cAR,1,state.cRS],
+    [state.cAS,state.cRS,1]];
+  return {means,vols,corr};
+}
+
+/* =========================================================================
+   EXPLORER
+   ========================================================================= */
+let explorerTimer=null;
+function scheduleExplorer(){clearTimeout(explorerTimer);explorerTimer=setTimeout(runExplorer,180);}
+function runExplorer(){
+  const nSims=state.explorerSims, years=Math.round(state.horizon);
+  const {means,vols,corr}=marketArrays();
+  const p=engineParams();
+  const gross=genReturns(nSims,years,means,vols,corr,state.seed);
+  const res=simulate(weights(),gross,nSims,years,p,true);
+
+  const tr=sortedCopy(res.termReal), pt=sortedCopy(res.payTot);
+  const start=p.corpus;
+  let preserve=0,depl=0,cut=0,cap=0,sev=0;
+  for(let i=0;i<nSims;i++){
+    if(res.termReal[i]>=start)preserve++; depl+=res.dep[i];
+    cut+=res.distCut[i]; cap+=res.capImp[i]; sev+=res.sevImp[i];
+  }
+  preserve/=nSims; depl/=nSims; cut/=nSims; cap/=nSims; sev/=nSims;
+
+  const B=1e9;
+  drawCards([
+    {k:"Median terminal",v:"$"+(pct(tr,.5)/B).toFixed(1)+"B",s:"real, in "+years+" yrs"},
+    {k:"Downside (5th pct)",v:"$"+(pct(tr,.05)/B).toFixed(1)+"B",s:"real worst-case"},
+    {k:"Upside (95th pct)",v:"$"+(pct(tr,.95)/B).toFixed(1)+"B",s:"real best-case"},
+    {k:"Preserve real value",v:(preserve*100).toFixed(0)+"%",s:"end ≥ start ($"+(start/B).toFixed(1)+"B)",good:preserve>=0.8},
+    {k:"Ever depleted",v:(depl*100).toFixed(1)+"%",s:"ran dry before "+years+" yrs",bad:depl>0.02},
+    {k:"Median lifetime payout",v:"$"+(pct(pt,.5)/B).toFixed(1)+"B",s:"nominal, total"},
+  ]);
+  const cutDepthMed=pct(sortedCopy(res.maxCutDepth),.5);
+  drawCards([
+    {k:"Cut distributions",v:(cut*100).toFixed(0)+"%",s:"payout falls >25% below its prior peak",bad:cut>0.20},
+    {k:"Worst cut depth",v:(cutDepthMed*100).toFixed(0)+"%",s:"deepest payout dip, median path",bad:cutDepthMed>0.25},
+    {k:"Capital impairment",v:(cap*100).toFixed(0)+"%",s:"ending corpus below start (nominal)",bad:cap>0.20},
+    {k:"Severe impairment",v:(sev*100).toFixed(0)+"%",s:"corpus drawdown >50% at some point",bad:sev>0.05},
+  ],"riskCards");
+
+  // fan bands for corpus (real)
+  const qs=[.05,.25,.5,.75,.95];
+  const bands={p5:[],p25:[],p50:[],p75:[],p95:[]};
+  for(let t=0;t<=years;t++){
+    const sc=sortedCopy(res.totByYear[t]);
+    bands.p5.push(pct(sc,.05)/B); bands.p25.push(pct(sc,.25)/B);
+    bands.p50.push(pct(sc,.5)/B); bands.p75.push(pct(sc,.75)/B);
+    bands.p95.push(pct(sc,.95)/B);
+  }
+  drawFan(document.getElementById("fanChart"),bands,years,start/B);
+
+  // payout fan (nominal)
+  const pb={p5:[],p25:[],p50:[],p75:[],p95:[]};
+  for(let t=0;t<years;t++){
+    const sc=sortedCopy(res.payByYear[t]);
+    pb.p5.push(pct(sc,.05)/B); pb.p25.push(pct(sc,.25)/B);
+    pb.p50.push(pct(sc,.5)/B); pb.p75.push(pct(sc,.75)/B);
+    pb.p95.push(pct(sc,.95)/B);
+  }
+  drawPayoutFan(document.getElementById("payoutChart"),pb,years);
+  window._explorerExport={years, cb:bands, pb};
+
+  drawHist(document.getElementById("histChart"),res.termReal,start);
+
+  document.getElementById("explorerNote").textContent=
+    `${nSims.toLocaleString()} simulations · ${years} years · allocation AI ${(weights()[0]*100).toFixed(0)}% / Real ${(weights()[1]*100).toFixed(0)}% / Reserve ${(weights()[2]*100).toFixed(0)}%`
+    + (state.inflation>0?` · terminal corpus shown in real (today's) dollars; payouts nominal.`:``);
+}
+
+/* =========================================================================
+   SWEEP
+   ========================================================================= */
+function allocGrid(stepPct){
+  const step=stepPct/100, ticks=[];
+  for(let v=0;v<=1+1e-9;v+=step)ticks.push(Math.round(v*1000)/1000);
+  const list=[];
+  for(const a of ticks)for(const s of ticks){
+    const r=Math.round((1-a-s)*1000)/1000;
+    if(r>=-1e-9)list.push([a,Math.max(r,0),s]);
+  }
+  return list;
+}
+// Compute all summary metrics for one allocation, reusing a sweep context.
+function metricsRow(w, ctx){
+  const {gross,nSims,years,p,start,B}=ctx;
+  const res=simulate(w,gross,nSims,years,p,false);
+  const tr=sortedCopy(res.termReal), pt=sortedCopy(res.payTot);
+  let preserve=0,cut=0,cap=0,sev=0;
+  for(let i=0;i<nSims;i++){
+    if(res.termReal[i]>=start)preserve++;
+    cut+=res.distCut[i]; cap+=res.capImp[i]; sev+=res.sevImp[i];
+  }
+  return {
+    wAI:w[0],wReal:w[1],wRes:w[2],
+    endMed:pct(tr,.5)/B, endP5:pct(tr,.05)/B,
+    preserve:preserve/nSims, payMed:pct(pt,.5)/B,
+    cut:cut/nSims, cap:cap/nSims, sev:sev/nSims,
+    cutDepth:pct(sortedCopy(res.maxCutDepth),.5),
+  };
+}
+function runSweep(){
+  const status=document.getElementById("sweepStatus");
+  status.textContent="Generating returns and running…";
+  setTimeout(()=>{
+    const t0=performance.now();
+    const nSims=state.sweepSims, years=Math.round(state.horizon);
+    const {means,vols,corr}=marketArrays();
+    const p=engineParams();
+    const gross=genReturns(nSims,years,means,vols,corr,state.seed);
+    const grid=allocGrid(state.gridStep);
+    const B=1e9, start=p.corpus;
+    const ctx={gross,nSims,years,p,start,B};
+    window._sweepCtx=ctx;
+    const rows=grid.map(w=>metricsRow(w,ctx));
+    const ms=Math.round(performance.now()-t0);
+    status.textContent=`${grid.length} allocations × ${nSims.toLocaleString()} sims · ${ms} ms`;
+    drawSweep(rows);
+    renderRefEditor();
+    recomputeRefs();
+  },20);
+}
+function drawSweep(rows){
+  // best callouts
+  const byMed=[...rows].sort((a,b)=>b.endMed-a.endMed)[0];
+  const byPres=[...rows].sort((a,b)=>b.preserve-a.preserve)[0];
+  const byDown=[...rows].sort((a,b)=>b.endP5-a.endP5)[0];
+  const byPay=[...rows].sort((a,b)=>b.payMed-a.payMed)[0];
+  const byCut=[...rows].sort((a,b)=>a.cut-b.cut)[0];
+  const byCap=[...rows].sort((a,b)=>a.cap-b.cap)[0];
+  const bySev=[...rows].sort((a,b)=>a.sev-b.sev)[0];
+  const fmtW=r=>`AI ${(r.wAI*100).toFixed(0)} / Real ${(r.wReal*100).toFixed(0)} / Res ${(r.wRes*100).toFixed(0)}`;
+  const row=(label,r)=>`<tr><td>${label}</td><td>${fmtW(r)}</td><td>${r.endMed.toFixed(1)}</td><td>${(r.preserve*100).toFixed(0)}%</td><td>${r.payMed.toFixed(1)}</td><td>${(r.cut*100).toFixed(0)}%</td><td>${(r.cap*100).toFixed(0)}%</td><td>${(r.sev*100).toFixed(0)}%</td></tr>`;
+  document.getElementById("sweepBest").innerHTML=`
+    <table style="margin-bottom:14px">
+      <thead><tr><th>Best allocation for…</th><th>AI/Real/Res</th><th>Median end $B</th><th>Preserve</th><th>Payout $B</th><th>Cut dist.</th><th>Cap. impair</th><th>Severe</th></tr></thead>
+      <tbody>
+        ${row("Largest terminal corpus",byMed)}
+        ${row("Best downside protection",byDown)}
+        ${row("Most likely to preserve value",byPres)}
+        ${row("Largest lifetime payout",byPay)}
+        ${row("Lowest chance of cutting payouts",byCut)}
+        ${row("Lowest capital-impairment risk",byCap)}
+        ${row("Lowest severe-impairment risk",bySev)}
+      </tbody>
+    </table>`;
+  window._sweepRows=rows;
+  drawFrontier(document.getElementById("frontierChart"),rows);
+  drawHeat(document.getElementById("heat1"),rows,"endMed",{cmap:viridis});
+  drawRiskSurface();
+}
+/* ---- CSV export (opens directly in Excel) ---- */
+function toCSV(headers,rows){
+  const esc=v=>{const s=String(v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  return "﻿"+[headers.map(esc).join(",")].concat(rows.map(r=>r.map(esc).join(","))).join("\r\n");
+}
+function download(filename,text){
+  const blob=new Blob([text],{type:"text/csv;charset=utf-8;"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},100);
+}
+const ALLOC_HEADERS=["Median end $B (real)","Downside 5th pct $B","Preserve real value %",
+  "Median lifetime payout $B","Cut distributions %","Worst cut depth %","Capital impairment %","Severe impairment %"];
+function allocCells(r){return [r.endMed.toFixed(2),r.endP5.toFixed(2),(r.preserve*100).toFixed(1),
+  r.payMed.toFixed(2),(r.cut*100).toFixed(1),(r.cutDepth*100).toFixed(1),(r.cap*100).toFixed(1),(r.sev*100).toFixed(1)];}
+function downloadGrid(){
+  const rows=window._sweepRows; if(!rows){alert("Run the allocation sweep first.");return;}
+  const headers=["AI %","Real %","Reserve %",...ALLOC_HEADERS];
+  const data=rows.map(r=>[(r.wAI*100).toFixed(0),(r.wReal*100).toFixed(0),(r.wRes*100).toFixed(0),...allocCells(r)]);
+  download("ai_endowment_sweep.csv",toCSV(headers,data));
+}
+function downloadRefs(){
+  const ctx=window._sweepCtx; if(!ctx){alert("Run the allocation sweep first.");return;}
+  const refs=refAllocs.map(a=>Object.assign({name:a.name||"-"},metricsRow(refWeights(a.ai,a.res),ctx)));
+  const headers=["Name","AI %","Real %","Reserve %",...ALLOC_HEADERS];
+  const data=refs.map(r=>[r.name,(r.wAI*100).toFixed(0),(r.wReal*100).toFixed(0),(r.wRes*100).toFixed(0),...allocCells(r)]);
+  download("ai_endowment_comparison.csv",toCSV(headers,data));
+}
+function downloadProjection(){
+  const e=window._explorerExport; if(!e){alert("Open the Explorer tab first.");return;}
+  const headers=["Year","Corpus 5th $B","Corpus 25th $B","Corpus median $B","Corpus 75th $B","Corpus 95th $B",
+    "Payout 5th $B","Payout 25th $B","Payout median $B","Payout 75th $B","Payout 95th $B"];
+  const data=[];
+  for(let t=0;t<=e.years;t++){
+    const row=[t,e.cb.p5[t].toFixed(3),e.cb.p25[t].toFixed(3),e.cb.p50[t].toFixed(3),e.cb.p75[t].toFixed(3),e.cb.p95[t].toFixed(3)];
+    if(t>=1){const i=t-1;row.push(e.pb.p5[i].toFixed(3),e.pb.p25[i].toFixed(3),e.pb.p50[i].toFixed(3),e.pb.p75[i].toFixed(3),e.pb.p95[i].toFixed(3));}
+    else row.push("","","","","");
+    data.push(row);
+  }
+  download("ai_endowment_projection.csv",toCSV(headers,data));
+}
+let refTimer=null;
+function scheduleRefs(){clearTimeout(refTimer);refTimer=setTimeout(recomputeRefs,200);}
+function renderRefEditor(){
+  const el=document.getElementById("refEditor");
+  el.innerHTML=`<div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);font-weight:700;margin:6px 0 6px">Reference allocations — edit &amp; compare</div>`;
+  const tbl=document.createElement("table"); tbl.style.marginBottom="6px";
+  tbl.innerHTML=`<thead><tr><th>Name</th><th>AI %</th><th>Reserve %</th><th>Real %</th><th></th></tr></thead>`;
+  const tb=document.createElement("tbody");
+  refAllocs.forEach((a,i)=>{
+    const w=refWeights(a.ai,a.res);
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td style="text-align:left"><input type="text" value="${a.name}" data-i="${i}" data-f="name" style="width:120px"></td>
+      <td><input type="number" value="${a.ai}" data-i="${i}" data-f="ai" min="0" max="100" step="5" style="width:62px"></td>
+      <td><input type="number" value="${a.res}" data-i="${i}" data-f="res" min="0" max="100" step="5" style="width:62px"></td>
+      <td style="color:var(--muted)">${(w[1]*100).toFixed(0)}%</td>
+      <td><button data-i="${i}" data-act="del" class="btn ghost" style="width:auto;padding:2px 9px;margin:0">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+  tbl.appendChild(tb); el.appendChild(tbl);
+  const add=document.createElement("button");
+  add.className="btn ghost"; add.style.width="auto"; add.style.padding="5px 12px";
+  add.textContent="+ Add allocation";
+  add.addEventListener("click",()=>{refAllocs.push({name:"Custom",ai:50,res:20});renderRefEditor();recomputeRefs();});
+  el.appendChild(add);
+  const dl=document.createElement("button");
+  dl.className="btn ghost"; dl.style.width="auto"; dl.style.padding="5px 12px"; dl.style.marginLeft="8px";
+  dl.textContent="⬇ Comparison → Excel/CSV";
+  dl.addEventListener("click",downloadRefs);
+  el.appendChild(dl);
+  el.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input",()=>{
+      const i=+inp.dataset.i, f=inp.dataset.f;
+      refAllocs[i][f]= f==="name"? inp.value : (parseFloat(inp.value)||0);
+      if(f!=="name"){
+        const w=refWeights(refAllocs[i].ai,refAllocs[i].res);
+        inp.closest("tr").children[3].textContent=(w[1]*100).toFixed(0)+"%";
+      }
+      scheduleRefs();
+    });
+  });
+  el.querySelectorAll('button[data-act="del"]').forEach(b=>{
+    b.addEventListener("click",()=>{refAllocs.splice(+b.dataset.i,1);renderRefEditor();recomputeRefs();});
+  });
+}
+function recomputeRefs(){
+  const ctx=window._sweepCtx; if(!ctx)return;
+  const refs=refAllocs.map(a=>Object.assign({name:a.name||"—"},metricsRow(refWeights(a.ai,a.res),ctx)));
+  const fmtW=r=>`AI ${(r.wAI*100).toFixed(0)} / Real ${(r.wReal*100).toFixed(0)} / Res ${(r.wRes*100).toFixed(0)}`;
+  const row=(label,r)=>`<tr><td style="text-align:left">${label}</td><td>${fmtW(r)}</td><td>${r.endMed.toFixed(1)}</td><td>${(r.preserve*100).toFixed(0)}%</td><td>${r.payMed.toFixed(1)}</td><td>${(r.cut*100).toFixed(0)}%</td><td>${(r.cutDepth*100).toFixed(0)}%</td><td>${(r.cap*100).toFixed(0)}%</td><td>${(r.sev*100).toFixed(0)}%</td></tr>`;
+  document.getElementById("refResults").innerHTML=`
+    <table style="margin-bottom:14px">
+      <thead><tr><th>Allocation</th><th>AI/Real/Res</th><th>Median end $B</th><th>Preserve</th><th>Payout $B</th><th>Cut dist.</th><th>Cut depth</th><th>Cap. impair</th><th>Severe</th></tr></thead>
+      <tbody>${refs.map(r=>row(r.name,r)).join("")}</tbody>
+    </table>`;
+}
+
+/* =========================================================================
+   CANVAS HELPERS
+   ========================================================================= */
+function prep(canvas,h){
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.clientWidth||canvas.parentNode.clientWidth-26;
+  canvas.width=w*dpr; canvas.height=h*dpr;
+  canvas.style.height=h+"px";
+  const ctx=canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  return {ctx,w,h};
+}
+const M={l:52,r:14,t:12,b:30};
+function axes(ctx,w,h,xmin,xmax,ymin,ymax,xlab,ylab,xfmt,yfmt){
+  ctx.strokeStyle="#2c3a49"; ctx.fillStyle="#9fb0c0"; ctx.lineWidth=1;
+  ctx.font="11px -apple-system,sans-serif";
+  const px=x=>M.l+(x-xmin)/(xmax-xmin)*(w-M.l-M.r);
+  const py=y=>h-M.b-(y-ymin)/(ymax-ymin)*(h-M.t-M.b);
+  // gridlines y
+  ctx.textAlign="right"; ctx.textBaseline="middle";
+  for(let i=0;i<=4;i++){
+    const yv=ymin+(ymax-ymin)*i/4, yy=py(yv);
+    ctx.strokeStyle="#222c38"; ctx.beginPath();ctx.moveTo(M.l,yy);ctx.lineTo(w-M.r,yy);ctx.stroke();
+    ctx.fillText(yfmt(yv),M.l-6,yy);
+  }
+  // x ticks
+  ctx.textAlign="center"; ctx.textBaseline="top";
+  for(let i=0;i<=5;i++){
+    const xv=xmin+(xmax-xmin)*i/5, xx=px(xv);
+    ctx.fillText(xfmt(xv),xx,h-M.b+6);
+  }
+  ctx.save();ctx.fillStyle="#9fb0c0";
+  ctx.textAlign="center";ctx.fillText(xlab,M.l+(w-M.l-M.r)/2,h-12);
+  ctx.translate(13,M.t+(h-M.t-M.b)/2);ctx.rotate(-Math.PI/2);ctx.fillText(ylab,0,0);
+  ctx.restore();
+  return {px,py};
+}
+function drawFan(canvas,b,years,startLine){
+  const {ctx,w,h}=prep(canvas,300);
+  let ymax=0; for(const v of b.p95)ymax=Math.max(ymax,v); ymax=Math.max(ymax,startLine)*1.08;
+  const {px,py}=axes(ctx,w,h,0,years,0,ymax,"year","real $B",x=>x.toFixed(0),y=>"$"+y.toFixed(0));
+  const bandFill=(lo,hi,col)=>{
+    ctx.beginPath();
+    for(let t=0;t<=years;t++){const xx=px(t),yy=py(hi[t]);t===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy);}
+    for(let t=years;t>=0;t--){ctx.lineTo(px(t),py(lo[t]));}
+    ctx.closePath();ctx.fillStyle=col;ctx.fill();
+  };
+  bandFill(b.p5,b.p95,"rgba(74,168,255,.22)");
+  bandFill(b.p25,b.p75,"rgba(74,168,255,.45)");
+  ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.beginPath();
+  for(let t=0;t<=years;t++){const xx=px(t),yy=py(b.p50[t]);t===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy);}
+  ctx.stroke();
+  ctx.strokeStyle="#ffb454";ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(px(0),py(startLine));ctx.lineTo(px(years),py(startLine));ctx.stroke();
+  ctx.setLineDash([]);
+}
+function drawPayoutFan(canvas,b,years){
+  const {ctx,w,h}=prep(canvas,260);
+  let ymax=0;for(const v of b.p95)ymax=Math.max(ymax,v);ymax*=1.1||1;
+  const {px,py}=axes(ctx,w,h,1,years,0,ymax||1,"year","nominal $B",x=>x.toFixed(0),y=>"$"+y.toFixed(2));
+  const idx=t=>t-1;
+  const bandFill=(lo,hi,col)=>{
+    ctx.beginPath();
+    for(let t=1;t<=years;t++){const xx=px(t),yy=py(hi[idx(t)]);t===1?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy);}
+    for(let t=years;t>=1;t--)ctx.lineTo(px(t),py(lo[idx(t)]));
+    ctx.closePath();ctx.fillStyle=col;ctx.fill();
+  };
+  bandFill(b.p5,b.p95,"rgba(255,180,84,.20)");
+  bandFill(b.p25,b.p75,"rgba(255,180,84,.42)");
+  ctx.strokeStyle="#ffb454";ctx.lineWidth=2;ctx.beginPath();
+  for(let t=1;t<=years;t++){const xx=px(t),yy=py(b.p50[idx(t)]);t===1?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy);}
+  ctx.stroke();
+}
+function drawHist(canvas,vals,start){
+  const {ctx,w,h}=prep(canvas,260);
+  const B=1e9; let mn=Infinity,mx=-Infinity;
+  for(const v of vals){mn=Math.min(mn,v);mx=Math.max(mx,v);}
+  mn/=B;mx/=B; if(mx-mn<1e-6)mx=mn+1;
+  const N=40, bins=new Array(N).fill(0);
+  for(const v of vals){let i=Math.floor((v/B-mn)/(mx-mn)*N);if(i>=N)i=N-1;if(i<0)i=0;bins[i]++;}
+  const bmax=Math.max(...bins);
+  const {px,py}=axes(ctx,w,h,mn,mx,0,bmax*1.05,"terminal real $B","# of outcomes",x=>"$"+x.toFixed(0),y=>(y/vals.length*100).toFixed(0)+"%");
+  const bw=(px(mx)-px(mn))/N;
+  for(let i=0;i<N;i++){
+    const x0=px(mn+(mx-mn)*i/N);
+    const xc=mn+(mx-mn)*(i+0.5)/N;
+    ctx.fillStyle=xc*B>=start?"rgba(82,196,26,.7)":"rgba(255,107,107,.7)";
+    ctx.fillRect(x0+0.5,py(bins[i]),bw-1,py(0)-py(bins[i]));
+  }
+  const sx=px(start/B);
+  if(start/B>=mn&&start/B<=mx){
+    ctx.strokeStyle="#fff";ctx.setLineDash([4,3]);ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(sx,M.t);ctx.lineTo(sx,h-M.b);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle="#fff";ctx.textAlign="left";ctx.font="10px sans-serif";
+    ctx.fillText("start",sx+3,M.t+4);
+  }
+}
+function drawFrontier(canvas,rows){
+  const {ctx,w,h}=prep(canvas,320);
+  let xmn=Infinity,xmx=-Infinity,ymn=Infinity,ymx=-Infinity;
+  for(const r of rows){xmn=Math.min(xmn,r.payMed);xmx=Math.max(xmx,r.payMed);ymn=Math.min(ymn,r.preserve);ymx=Math.max(ymx,r.preserve);}
+  const xpad=(xmx-xmn)*0.05||1, ypad=(ymx-ymn)*0.08||.05;
+  const {px,py}=axes(ctx,w,h,xmn-xpad,xmx+xpad,Math.max(0,ymn-ypad),Math.min(1,ymx+ypad),
+    "median lifetime payout ($B)","preserve real value",x=>"$"+x.toFixed(1),y=>(y*100).toFixed(0)+"%");
+  for(const r of rows){
+    ctx.fillStyle=viridis(r.wAI);
+    ctx.beginPath();ctx.arc(px(r.payMed),py(r.preserve),3.6,0,2*Math.PI);ctx.fill();
+    ctx.strokeStyle="rgba(0,0,0,.4)";ctx.lineWidth=.4;ctx.stroke();
+  }
+}
+function drawHeat(canvas,rows,key,opts){
+  opts=opts||{};
+  const cmap=opts.cmap||viridis, lower=!!opts.lowerBetter;
+  const {ctx,w,h}=prep(canvas,300);
+  const ais=[...new Set(rows.map(r=>r.wAI))].sort((a,b)=>a-b);
+  const ress=[...new Set(rows.map(r=>r.wRes))].sort((a,b)=>a-b);
+  const lut={}; for(const r of rows)lut[r.wAI.toFixed(3)+"|"+r.wRes.toFixed(3)]=r[key];
+  let vmn=Infinity,vmx=-Infinity;
+  for(const r of rows){vmn=Math.min(vmn,r[key]);vmx=Math.max(vmx,r[key]);}
+  const step=ais.length>1?ais[1]-ais[0]:1;
+  const {px,py}=axes(ctx,w,h,-step/2,1+step/2,-step/2,1+step/2,"AI weight","Reserve weight",
+    x=>(x*100).toFixed(0)+"%",y=>(y*100).toFixed(0)+"%");
+  const cw=(px(step)-px(0)), ch=(py(0)-py(step));
+  let best=null;
+  for(const a of ais)for(const s of ress){
+    const v=lut[a.toFixed(3)+"|"+s.toFixed(3)];
+    if(v===undefined)continue;
+    const norm=(v-vmn)/((vmx-vmn)||1);
+    ctx.fillStyle=cmap(lower?1-norm:norm);     // invert color scale when lower=better
+    ctx.fillRect(px(a-step/2),py(s+step/2),cw+1,ch+1);
+    if(best===null || (lower? v<best.v : v>best.v))best={a,s,v};
+  }
+  if(best){
+    ctx.fillStyle="#fff";ctx.font="16px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText("★",px(best.a),py(best.s));    // ★ marks the best (greenest) cell
+  }
+}
+function drawRiskSurface(){
+  const rows=window._sweepRows; if(!rows)return;
+  const m=document.getElementById("riskMetric").value;
+  drawHeat(document.getElementById("heat2"),rows,m,{cmap:rdylgn,lowerBetter:m!=="preserve"});
+}
+
+/* =========================================================================
+   COLOR MAPS
+   ========================================================================= */
+function lerp(a,b,t){return a+(b-a)*t;}
+function rampColor(stops,t){
+  t=Math.max(0,Math.min(1,t));
+  const n=stops.length-1, f=t*n, i=Math.min(Math.floor(f),n-1), u=f-i;
+  const c0=stops[i],c1=stops[i+1];
+  return `rgb(${Math.round(lerp(c0[0],c1[0],u))},${Math.round(lerp(c0[1],c1[1],u))},${Math.round(lerp(c0[2],c1[2],u))})`;
+}
+const VIR=[[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
+const RYG=[[215,48,39],[254,224,139],[26,152,80]];
+function viridis(t){return rampColor(VIR,t);}
+function rdylgn(t){return rampColor(RYG,t);}
+
+/* =========================================================================
+   TABS + INIT
+   ========================================================================= */
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    tab.classList.add("active");
+    const which=tab.dataset.tab;
+    document.getElementById("explorer").classList.toggle("hidden",which!=="explorer");
+    document.getElementById("sweep").classList.toggle("hidden",which!=="sweep");
+    if(which==="explorer")runExplorer();
+    if(which==="sweep" && !window._sweptOnce){window._sweptOnce=true;runSweep();}
+  });
+});
+document.getElementById("runSweep").addEventListener("click",runSweep);
+document.getElementById("riskMetric").addEventListener("change",drawRiskSurface);
+document.getElementById("dlGrid").addEventListener("click",downloadGrid);
+document.getElementById("dlProj").addEventListener("click",downloadProjection);
+function drawCards(cards,elId){
+  document.getElementById(elId||"statCards").innerHTML=cards.map(c=>
+    `<div class="card"><div class="k">${c.k}</div>
+     <div class="v" style="color:${c.good?'var(--good)':c.bad?'var(--bad)':'var(--ink)'}">${c.v}</div>
+     <div class="s">${c.s}</div></div>`).join("");
+}
+buildControls();
+runExplorer();
+window.addEventListener("resize",()=>{clearTimeout(window._rsz);window._rsz=setTimeout(runExplorer,200);});
+</script>
+</body>
+</html>

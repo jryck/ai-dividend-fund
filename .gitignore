@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Regenerable sweep output (created by montecarlo.py)
+results_allocations.csv
+
+# Downloaded exports from the interactive tool
+ai_endowment_projection.csv
+ai_endowment_sweep.csv
+ai_endowment_comparison.csv
