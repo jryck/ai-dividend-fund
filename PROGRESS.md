@@ -46,11 +46,16 @@ There's a Desktop shortcut ("AI Fund Simulator") that opens the tool.
       + authenticated. Repo is now PUBLIC: https://github.com/jryck/ai-dividend-fund
       Live tool: https://jryck.github.io/ai-dividend-fund/
       (`index.html` is a redirect to `ai_endowment_tool.html` so the root URL is clean.)
-      Decision history: started private, then switched to public live after seeing a peer
-      (windfalltrust.github.io/ai-shock) do the same. Source is publicly viewable — accepted.
+      Decision history: started private, then switched to public live to match the client's
+      own tool (windfalltrust.github.io/ai-shock). Source is publicly viewable — accepted.
       To UN-publish later: disable Pages and/or flip repo back to private.
-- [ ] **Competitive/naming check:** a GitHub org named `windfalltrust` runs an "AI Shock
-      Fiscal Simulator" — possible name clash with the intended "Windfall" product. Investigate.
+
+## Context: this is a CONSULTING DELIVERABLE
+This tool is being built FOR the **Windfall Trust** (the client — the org behind the
+`ai-shock` simulator). It is NOT the user's own product and should NOT be branded "Windfall."
+Name it descriptively, e.g. "AI Dividend Fund Monte Carlo Simulation."
+- [ ] **Open question:** should the deliverable eventually live under the client's
+      `windfalltrust` GitHub org rather than the user's personal `jryck` account?
 
 ## Ideas not yet built (offered)
 - Record displacement scenario settings inside the CSV exports.
