@@ -835,7 +835,11 @@ function prep(canvas,h){
   return {ctx,w,h};
 }
 const M={l:52,r:14,t:12,b:30};
-function axes(ctx,w,h,xmin,xmax,ymin,ymax,xlab,ylab,xfmt,yfmt){
+function axes(ctx,w,h,xmin,xmax,ymin,ymax,xlab,ylab,xfmt,yfmt,opts){
+  opts=opts||{};
+  // tick labels normally span the drawing range, but can be pinned to a clean
+  // range (e.g. 0–100%) when the drawing range is padded — see heatmaps.
+  const yr=opts.yTickRange||[ymin,ymax], xr=opts.xTickRange||[xmin,xmax];
   ctx.strokeStyle="#2c3a49"; ctx.fillStyle="#9fb0c0"; ctx.lineWidth=1;
   ctx.font="11px -apple-system,sans-serif";
   const px=x=>M.l+(x-xmin)/(xmax-xmin)*(w-M.l-M.r);
@@ -843,14 +847,14 @@ function axes(ctx,w,h,xmin,xmax,ymin,ymax,xlab,ylab,xfmt,yfmt){
   // gridlines y
   ctx.textAlign="right"; ctx.textBaseline="middle";
   for(let i=0;i<=4;i++){
-    const yv=ymin+(ymax-ymin)*i/4, yy=py(yv);
+    const yv=yr[0]+(yr[1]-yr[0])*i/4, yy=py(yv);
     ctx.strokeStyle="#222c38"; ctx.beginPath();ctx.moveTo(M.l,yy);ctx.lineTo(w-M.r,yy);ctx.stroke();
     ctx.fillText(yfmt(yv),M.l-6,yy);
   }
   // x ticks
   ctx.textAlign="center"; ctx.textBaseline="top";
   for(let i=0;i<=5;i++){
-    const xv=xmin+(xmax-xmin)*i/5, xx=px(xv);
+    const xv=xr[0]+(xr[1]-xr[0])*i/5, xx=px(xv);
     ctx.fillText(xfmt(xv),xx,h-M.b+6);
   }
   ctx.save();ctx.fillStyle="#9fb0c0";
@@ -966,7 +970,8 @@ function drawHeat(canvas,rows,key,opts){
   for(const r of rows){vmn=Math.min(vmn,r[key]);vmx=Math.max(vmx,r[key]);}
   const step=ais.length>1?ais[1]-ais[0]:1;
   const {px,py}=axes(ctx,w,h,-step/2,1+step/2,-step/2,1+step/2,"AI weight","Reserve weight",
-    x=>(x*100).toFixed(0)+"%",y=>(y*100).toFixed(0)+"%");
+    x=>(x*100).toFixed(0)+"%",y=>(y*100).toFixed(0)+"%",
+    {xTickRange:[0,1],yTickRange:[0,1]});
   const cw=(px(step)-px(0)), ch=(py(0)-py(step));
   let best=null;
   for(const a of ais)for(const s of ress){
