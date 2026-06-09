@@ -23,7 +23,13 @@
     height:calc(100vh - 64px);overflow-y:auto;background:var(--panel)}
   .group{margin-bottom:18px}
   .group h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;
-    color:var(--accent);font-weight:700}
+    color:var(--accent);font-weight:700;cursor:pointer;user-select:none;
+    display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .group h3:hover{filter:brightness(1.25)}
+  .group .caret{font-size:9px;color:var(--muted);transition:transform .15s}
+  .group.collapsed .caret{transform:rotate(-90deg)}
+  .group.collapsed .group-body{display:none}
+  .group.collapsed{margin-bottom:9px}
   .field{margin-bottom:10px}
   .field .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
   .field label{color:var(--muted);font-size:12.5px}
@@ -114,6 +120,11 @@
           <h4>Terminal corpus distribution — real $B</h4>
           <canvas id="histChart" height="260"></canvas>
         </div>
+        <div class="chart full" id="demandChartWrap" style="display:none">
+          <h4>Demand multiplier over time (×) — distribution demand vs. baseline</h4>
+          <canvas id="demandChart" height="240"></canvas>
+          <p class="note">Above 1.0× = higher displacement raises distributions; below 1.0× = low displacement conserves the corpus. White line = median, band = 5th–95th percentile.</p>
+        </div>
       </div>
       <p class="note" id="explorerNote"></p>
     </section>
@@ -163,7 +174,7 @@
    PARAMETER DEFINITIONS  (drive the control panel)
    ========================================================================= */
 const GROUPS = [
-  {title:"Allocation (target weights)", fields:[
+  {title:"Allocation (target weights)", keepOpen:true, fields:[
     {key:"wAI",   label:"AI bucket",      min:0, max:100, step:1, def:40, unit:"%"},
     {key:"wRes",  label:"Reserve bucket", min:0, max:100, step:1, def:20, unit:"%"},
   ], allocReadout:true},
@@ -192,7 +203,22 @@ const GROUPS = [
     {key:"inflation",label:"Inflation",   min:0, max:6, step:0.25, def:0, unit:"%"},
     {key:"fee",      label:"Annual fee",  min:0, max:2, step:0.05, def:0, unit:"%"},
   ]},
+  {title:"Displacement &amp; demand (optional)", displaceGroup:true, fields:[
+    {key:"dSens",    label:"Demand sensitivity",     min:0,   max:1,   step:0.05, def:0,   unit:""},
+    {key:"dCorrAI",  label:"Displacement ↔ AI return",min:-0.9,max:0.9, step:0.05, def:0,   unit:""},
+    {key:"dCorrReal",label:"Displacement ↔ Real econ", min:-0.9,max:0.9, step:0.05, def:0,  unit:""},
+    {key:"dPersist", label:"Displacement persistence",min:0,   max:0.9, step:0.05, def:0.6, unit:""},
+    {key:"dTrend",   label:"Displacement trend/yr",   min:-0.2,max:0.2, step:0.02, def:0,   unit:""},
+    {key:"dCap",     label:"Max demand multiplier",   min:1,   max:4,   step:0.25, def:2,   unit:"x"},
+  ]},
 ];
+// Demand presets set the displacement knobs in one click (Custom leaves them alone).
+const DEMAND_PRESETS={
+  "Off":       {dSens:0,    dCorrAI:0,    dCorrReal:0,    dTrend:0},
+  "AI-driven": {dSens:0.30, dCorrAI:0.60, dCorrReal:-0.20,dTrend:0},
+  "Hardship":  {dSens:0.30, dCorrAI:-0.10,dCorrReal:-0.70,dTrend:0},
+  "Backlash":  {dSens:0.30, dCorrAI:-0.60,dCorrReal:-0.40,dTrend:0.05},
+};
 const SIM_OPTS = {
   explorerSims:[{v:2000,t:"2,000 (fastest)"},{v:5000,t:"5,000"},{v:10000,t:"10,000 (default)"},{v:25000,t:"25,000 (slow)"}],
   sweepSims:[{v:1000,t:"1,000 (fast)"},{v:2000,t:"2,000 (default)"},{v:5000,t:"5,000 (slow)"}],
@@ -267,51 +293,80 @@ function calibrate(means, vols){
   }
   return {mu,sg};
 }
-// Generate gross returns (1+r): Float64Array length nSims*years*3
-function genReturns(nSims, years, means, vols, corr, seed){
+// Generate gross returns (1+r) plus a standardized displacement factor.
+// Returns {gross: Float64Array(nSims*years*3), disp: Float64Array(nSims*years)}.
+// The displacement factor is a unit-variance N(0,1) correlated with the AI and
+// Real standardized shocks at dispCorr.ai / dispCorr.real, with the remaining
+// variance drawn from an INDEPENDENT stream so the bucket returns are unchanged
+// (displacement can be high even when AI is down — the regulation/backlash case).
+function genReturns(nSims, years, means, vols, corr, seed, dispCorr){
   const {mu,sg}=calibrate(means,vols);
   const cov=[[0,0,0],[0,0,0],[0,0,0]];
   for(let i=0;i<3;i++)for(let j=0;j<3;j++)cov[i][j]=corr[i][j]*sg[i]*sg[j];
   const L=cholesky3(cov);
-  const rng=mulberry32(seed>>>0);
-  const nrm=normalGen(rng);
-  const out=new Float64Array(nSims*years*3);
+  // Solve loadings for Disp = a*cAI + b*cReal + g*eps (cAI,cReal = standardized
+  // bucket shocks with correlation r), hitting target corr(Disp,AI)/corr(Disp,Real).
+  const rA=(dispCorr&&dispCorr.ai)||0, rR=(dispCorr&&dispCorr.real)||0, r=corr[0][1];
+  const den=1-r*r;
+  let a=(rA-r*rR)/den, b=(rR-r*rA)/den;
+  let g2=1-(a*a+b*b+2*a*b*r);
+  if(g2<0){const f=1/Math.sqrt(a*a+b*b+2*a*b*r); a*=f; b*=f; g2=0;}  // clamp if infeasible
+  const g=Math.sqrt(g2);
+  const rng=mulberry32(seed>>>0), nrm=normalGen(rng);
+  const rng2=mulberry32((seed^0x9e3779b9)>>>0), nrm2=normalGen(rng2);  // independent stream
+  const out=new Float64Array(nSims*years*3), disp=new Float64Array(nSims*years);
   for(let k=0;k<nSims*years;k++){
     const z0=nrm(),z1=nrm(),z2=nrm();
     const x0=mu[0]+L[0][0]*z0;
     const x1=mu[1]+L[1][0]*z0+L[1][1]*z1;
     const x2=mu[2]+L[2][0]*z0+L[2][1]*z1+L[2][2]*z2;
-    const b=k*3;
-    out[b]=Math.exp(x0); out[b+1]=Math.exp(x1); out[b+2]=Math.exp(x2);
+    const b3=k*3;
+    out[b3]=Math.exp(x0); out[b3+1]=Math.exp(x1); out[b3+2]=Math.exp(x2);
+    const cAI=(x0-mu[0])/sg[0], cReal=(x1-mu[1])/sg[1];  // standardized shocks
+    disp[k]=a*cAI+b*cReal+g*nrm2();
   }
-  return out;
+  return {gross:out, disp};
 }
 // Simulate all paths for one allocation.
-function simulate(weights, gross, nSims, years, p, record){
+function simulate(weights, gross, disp, nSims, years, p, record){
   const wA=weights[0], wR=weights[1], wS=weights[2];
   const start=p.corpus, baseRate=p.baseRate, sm=p.smoothing, infl=p.inflation, fee=p.fee;
   const feeMul=1-fee, defl=Math.pow(1+infl,years);
+  // Displacement / demand-multiplier settings.
+  const dSens=p.dSens||0, dPersist=p.dPersist||0, dTrend=p.dTrend||0;
+  const dCap=p.dCap||2, dFloor=p.dFloor||0.5, dOn=dSens>0;
+  const dNorm=Math.sqrt(Math.max(1e-9,1-dPersist*dPersist));  // standardize the AR(1) level
   const termReal=new Float64Array(nSims), payTot=new Float64Array(nSims);
   const dep=new Uint8Array(nSims);
   const distCut=new Uint8Array(nSims), capImp=new Uint8Array(nSims), sevImp=new Uint8Array(nSims);
   const maxCutDepth=new Float64Array(nSims);
-  let totByYear=null, payByYear=null;
+  let totByYear=null, payByYear=null, multByYear=null;
   if(record){
     totByYear=[]; for(let t=0;t<=years;t++)totByYear.push(new Float64Array(nSims));
     payByYear=[]; for(let t=0;t<years;t++)payByYear.push(new Float64Array(nSims));
+    multByYear=[]; for(let t=0;t<years;t++)multByYear.push(new Float64Array(nSims));
   }
   for(let s=0;s<nSims;s++){
     let vA=start*wA, vR=start*wR, vS=start*wS;
     let distPrev=baseRate*start, paySum=0, everDep=false;
     let distHWM=baseRate*start, corpHWM=start, cut=false, sev=false, worstCut=0;
+    let dLev=0;
     if(record)totByYear[0][s]=start;
-    const base=s*years*3;
+    const base=s*years*3, dbase=s*years;
     for(let t=0;t<years;t++){
       const b=base+t*3;
       vA*=gross[b]; vR*=gross[b+1]; vS*=gross[b+2];
       if(fee>0){vA*=feeMul; vR*=feeMul; vS*=feeMul;}
       const total=vA+vR+vS;
-      let spend=sm*distPrev*(1+infl)+(1-sm)*baseRate*total;
+      // Demand multiplier from the persistent displacement state.
+      let mult=1;
+      if(dOn){
+        dLev=dPersist*dLev+disp[dbase+t]+dTrend;
+        mult=1+dSens*(dLev*dNorm);
+        if(mult<dFloor)mult=dFloor; if(mult>dCap)mult=dCap;
+      }
+      if(record)multByYear[t][s]=mult;
+      let spend=sm*distPrev*(1+infl)+(1-sm)*baseRate*total*mult;
       if(spend>total)spend=total;
       if(spend<0)spend=0;
       if(spend<distHWM){
@@ -336,7 +391,7 @@ function simulate(weights, gross, nSims, years, p, record){
     sevImp[s]=sev?1:0;
     maxCutDepth[s]=worstCut;                     // deepest payout dip below prior peak
   }
-  return {termReal,payTot,dep,distCut,capImp,sevImp,maxCutDepth,totByYear,payByYear};
+  return {termReal,payTot,dep,distCut,capImp,sevImp,maxCutDepth,totByYear,payByYear,multByYear};
 }
 function pct(sorted,q){
   if(sorted.length===0)return 0;
@@ -363,14 +418,28 @@ function fmtVal(f,v){
   if(f.unit==="%")return v+"%";
   if(f.unit==="$B")return "$"+v+"B";
   if(f.unit==="yr")return v+" yr";
+  if(f.unit==="x")return Number(v).toFixed(2)+"×";
   if(f.unit==="")return Number(v).toFixed(2);
   return v;
 }
 function buildControls(){
   const root=document.getElementById("controls");
   GROUPS.forEach(g=>{
-    const div=document.createElement("div"); div.className="group";
-    div.innerHTML=`<h3>${g.title}</h3>`;
+    const div=document.createElement("div"); div.className="group"+(g.keepOpen?"":" collapsed");
+    const head=document.createElement("h3");
+    head.innerHTML=`<span>${g.title}</span><span class="caret">▾</span>`;
+    head.addEventListener("click",()=>div.classList.toggle("collapsed"));
+    div.appendChild(head);
+    const body=document.createElement("div"); body.className="group-body";
+    if(g.displaceGroup){
+      const w=document.createElement("div"); w.className="field";
+      w.innerHTML=`<div class="row"><label>Scenario preset</label></div>`;
+      const sel=document.createElement("select"); sel.id="demandPreset";
+      ["Off","AI-driven","Hardship","Backlash","Custom"].forEach(n=>{
+        const op=document.createElement("option"); op.value=n; op.textContent=n; sel.appendChild(op);});
+      sel.addEventListener("change",()=>applyDemandPreset(sel.value));
+      w.appendChild(sel); body.appendChild(w);
+    }
     g.fields.forEach(f=>{
       const wrap=document.createElement("div"); wrap.className="field";
       wrap.innerHTML=`
@@ -379,31 +448,37 @@ function buildControls(){
           <span class="val" id="v_${f.key}">${fmtVal(f,state[f.key])}</span>
         </div>
         <input type="range" id="r_${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${state[f.key]}">`;
-      div.appendChild(wrap);
+      body.appendChild(wrap);
       const range=wrap.querySelector("input");
       range.addEventListener("input",()=>{
         state[f.key]=parseFloat(range.value);
         document.getElementById("v_"+f.key).textContent=fmtVal(f,state[f.key]);
         if(g.allocReadout)updateAllocReadout();
+        if(g.displaceGroup){const dp=document.getElementById("demandPreset"); if(dp)dp.value="Custom";}
         scheduleExplorer();
       });
     });
     if(g.allocReadout){
       const ro=document.createElement("div"); ro.className="alloc-readout"; ro.id="allocReadout";
-      div.appendChild(ro);
+      body.appendChild(ro);
     }
+    div.appendChild(body);
     root.appendChild(div);
   });
   // simulation settings
-  const simDiv=document.createElement("div"); simDiv.className="group";
-  simDiv.innerHTML="<h3>Simulation</h3>";
+  const simDiv=document.createElement("div"); simDiv.className="group collapsed";
+  const simHead=document.createElement("h3");
+  simHead.innerHTML=`<span>Simulation</span><span class="caret">▾</span>`;
+  simHead.addEventListener("click",()=>simDiv.classList.toggle("collapsed"));
+  simDiv.appendChild(simHead);
+  const simBody=document.createElement("div"); simBody.className="group-body";
   const mkSelect=(key,label,opts)=>{
     const w=document.createElement("div"); w.className="field";
     w.innerHTML=`<div class="row"><label>${label}</label></div>`;
     const sel=document.createElement("select");
     opts.forEach(o=>{const op=document.createElement("option");op.value=o.v;op.textContent=o.t;if(o.v===state[key])op.selected=true;sel.appendChild(op);});
     sel.addEventListener("change",()=>{state[key]=parseInt(sel.value);if(key==="explorerSims")scheduleExplorer();});
-    w.appendChild(sel); simDiv.appendChild(w);
+    w.appendChild(sel); simBody.appendChild(w);
   };
   mkSelect("explorerSims","Explorer simulations",SIM_OPTS.explorerSims);
   mkSelect("sweepSims","Sweep simulations",SIM_OPTS.sweepSims);
@@ -412,10 +487,11 @@ function buildControls(){
   seedField.innerHTML=`<div class="row"><label>Random seed</label>
     <input type="number" id="seedInput" value="${state.seed}" style="width:90px"></div>`;
   seedField.querySelector("input").addEventListener("input",e=>{state.seed=parseInt(e.target.value)||0;scheduleExplorer();});
-  simDiv.appendChild(seedField);
+  simBody.appendChild(seedField);
   const reset=document.createElement("button"); reset.className="btn ghost"; reset.textContent="Reset to defaults";
   reset.addEventListener("click",resetDefaults);
-  simDiv.appendChild(reset);
+  simBody.appendChild(reset);
+  simDiv.appendChild(simBody);
   root.appendChild(simDiv);
   updateAllocReadout();
 }
@@ -432,7 +508,21 @@ function resetDefaults(){
     document.getElementById("r_"+f.key).value=f.def;
     document.getElementById("v_"+f.key).textContent=fmtVal(f,f.def);
   }));
+  const dp=document.getElementById("demandPreset"); if(dp)dp.value="Off";
   updateAllocReadout(); runExplorer();
+}
+// Apply a demand preset: set the displacement knobs and sync their sliders.
+function applyDemandPreset(name){
+  const preset=DEMAND_PRESETS[name];
+  if(!preset)return;                         // "Custom" leaves knobs as-is
+  const fields=GROUPS.find(g=>g.displaceGroup).fields;
+  for(const key in preset){
+    state[key]=preset[key];
+    const r=document.getElementById("r_"+key);
+    const f=fields.find(x=>x.key===key);
+    if(r){r.value=preset[key]; document.getElementById("v_"+key).textContent=fmtVal(f,preset[key]);}
+  }
+  scheduleExplorer();
 }
 
 /* =========================================================================
@@ -442,6 +532,7 @@ function engineParams(){
   return {
     corpus:state.corpus*1e9, baseRate:state.baseRate/100, smoothing:state.smoothing,
     inflation:state.inflation/100, fee:state.fee/100,
+    dSens:state.dSens, dPersist:state.dPersist, dTrend:state.dTrend, dCap:state.dCap, dFloor:0.5,
   };
 }
 function marketArrays(){
@@ -451,7 +542,8 @@ function marketArrays(){
     [1,state.cAR,state.cAS],
     [state.cAR,1,state.cRS],
     [state.cAS,state.cRS,1]];
-  return {means,vols,corr};
+  const dispCorr={ai:state.dCorrAI, real:state.dCorrReal};
+  return {means,vols,corr,dispCorr};
 }
 
 /* =========================================================================
@@ -461,10 +553,10 @@ let explorerTimer=null;
 function scheduleExplorer(){clearTimeout(explorerTimer);explorerTimer=setTimeout(runExplorer,180);}
 function runExplorer(){
   const nSims=state.explorerSims, years=Math.round(state.horizon);
-  const {means,vols,corr}=marketArrays();
+  const {means,vols,corr,dispCorr}=marketArrays();
   const p=engineParams();
-  const gross=genReturns(nSims,years,means,vols,corr,state.seed);
-  const res=simulate(weights(),gross,nSims,years,p,true);
+  const {gross,disp}=genReturns(nSims,years,means,vols,corr,state.seed,dispCorr);
+  const res=simulate(weights(),gross,disp,nSims,years,p,true);
 
   const tr=sortedCopy(res.termReal), pt=sortedCopy(res.payTot);
   const start=p.corpus;
@@ -516,9 +608,26 @@ function runExplorer(){
 
   drawHist(document.getElementById("histChart"),res.termReal,start);
 
-  document.getElementById("explorerNote").textContent=
-    `${nSims.toLocaleString()} simulations · ${years} years · allocation AI ${(weights()[0]*100).toFixed(0)}% / Real ${(weights()[1]*100).toFixed(0)}% / Reserve ${(weights()[2]*100).toFixed(0)}%`
-    + (state.inflation>0?` · terminal corpus shown in real (today's) dollars; payouts nominal.`:``);
+  // demand-multiplier fan (only meaningful when displacement is on)
+  const demandWrap=document.getElementById("demandChartWrap");
+  if(state.dSens>0){
+    demandWrap.style.display="";
+    const mb={p5:[],p25:[],p50:[],p75:[],p95:[]};
+    for(let t=0;t<years;t++){
+      const sc=sortedCopy(res.multByYear[t]);
+      mb.p5.push(pct(sc,.05)); mb.p25.push(pct(sc,.25)); mb.p50.push(pct(sc,.5));
+      mb.p75.push(pct(sc,.75)); mb.p95.push(pct(sc,.95));
+    }
+    drawMultFan(document.getElementById("demandChart"),mb,years);
+  } else { demandWrap.style.display="none"; }
+
+  let note=`${nSims.toLocaleString()} simulations · ${years} years · allocation AI ${(weights()[0]*100).toFixed(0)}% / Real ${(weights()[1]*100).toFixed(0)}% / Reserve ${(weights()[2]*100).toFixed(0)}%`
+    + (state.inflation>0?` · terminal corpus in real (today's) dollars; payouts nominal.`:``);
+  if(state.dSens>0){
+    const dp=document.getElementById("demandPreset");
+    note+=` · demand response ON${dp?` (${dp.value})`:``}: distributions scale with displacement (Disp↔AI ${state.dCorrAI>=0?"+":""}${state.dCorrAI.toFixed(2)}, Disp↔Real ${state.dCorrReal>=0?"+":""}${state.dCorrReal.toFixed(2)}).`;
+  }
+  document.getElementById("explorerNote").textContent=note;
 }
 
 /* =========================================================================
@@ -536,8 +645,8 @@ function allocGrid(stepPct){
 }
 // Compute all summary metrics for one allocation, reusing a sweep context.
 function metricsRow(w, ctx){
-  const {gross,nSims,years,p,start,B}=ctx;
-  const res=simulate(w,gross,nSims,years,p,false);
+  const {gross,disp,nSims,years,p,start,B}=ctx;
+  const res=simulate(w,gross,disp,nSims,years,p,false);
   const tr=sortedCopy(res.termReal), pt=sortedCopy(res.payTot);
   let preserve=0,cut=0,cap=0,sev=0;
   for(let i=0;i<nSims;i++){
@@ -558,12 +667,12 @@ function runSweep(){
   setTimeout(()=>{
     const t0=performance.now();
     const nSims=state.sweepSims, years=Math.round(state.horizon);
-    const {means,vols,corr}=marketArrays();
+    const {means,vols,corr,dispCorr}=marketArrays();
     const p=engineParams();
-    const gross=genReturns(nSims,years,means,vols,corr,state.seed);
+    const {gross,disp}=genReturns(nSims,years,means,vols,corr,state.seed,dispCorr);
     const grid=allocGrid(state.gridStep);
     const B=1e9, start=p.corpus;
-    const ctx={gross,nSims,years,p,start,B};
+    const ctx={gross,disp,nSims,years,p,start,B};
     window._sweepCtx=ctx;
     const rows=grid.map(w=>metricsRow(w,ctx));
     const ms=Math.round(performance.now()-t0);
@@ -774,6 +883,29 @@ function drawPayoutFan(canvas,b,years){
   ctx.strokeStyle="#ffb454";ctx.lineWidth=2;ctx.beginPath();
   for(let t=1;t<=years;t++){const xx=px(t),yy=py(b.p50[idx(t)]);t===1?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy);}
   ctx.stroke();
+}
+function drawMultFan(canvas,b,years){
+  const {ctx,w,h}=prep(canvas,240);
+  let ymin=Infinity,ymax=-Infinity;
+  for(const v of b.p5)ymin=Math.min(ymin,v);
+  for(const v of b.p95)ymax=Math.max(ymax,v);
+  ymin=Math.min(ymin,1); ymax=Math.max(ymax,1);
+  const pad=(ymax-ymin)*0.12||0.1; ymin-=pad; ymax+=pad;
+  const {px,py}=axes(ctx,w,h,1,years,ymin,ymax,"year","multiplier (×)",x=>x.toFixed(0),y=>y.toFixed(2)+"×");
+  const idx=t=>t-1;
+  const bandFill=(lo,hi,col)=>{
+    ctx.beginPath();
+    for(let t=1;t<=years;t++){const xx=px(t),yy=py(hi[idx(t)]);t===1?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy);}
+    for(let t=years;t>=1;t--)ctx.lineTo(px(t),py(lo[idx(t)]));
+    ctx.closePath();ctx.fillStyle=col;ctx.fill();
+  };
+  bandFill(b.p5,b.p95,"rgba(180,92,255,.20)");
+  bandFill(b.p25,b.p75,"rgba(180,92,255,.42)");
+  ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.beginPath();
+  for(let t=1;t<=years;t++){const xx=px(t),yy=py(b.p50[idx(t)]);t===1?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy);}
+  ctx.stroke();
+  ctx.strokeStyle="#7ee0c0";ctx.setLineDash([5,4]);ctx.lineWidth=1.5;   // 1.0x baseline
+  ctx.beginPath();ctx.moveTo(px(1),py(1));ctx.lineTo(px(years),py(1));ctx.stroke();ctx.setLineDash([]);
 }
 function drawHist(canvas,vals,start){
   const {ctx,w,h}=prep(canvas,260);
