@@ -42,14 +42,15 @@ There's a Desktop shortcut ("AI Fund Simulator") that opens the tool.
   (Disp↔AI negative) is the worst case for the fund.
 
 ## OPEN / NEXT STEPS
-- [x] **Backed up to GitHub as a PRIVATE repo (2026-06-09).** Account `jryck` created,
-      `gh` CLI installed + authenticated, all changes committed and pushed.
-      Repo: https://github.com/jryck/ai-dividend-fund (private — not on the public web).
-      Decision: kept PRIVATE because the tool may become a product ("Windfall"). Note that
-      because the tool is a self-contained client-side HTML file, ANY live web link would
-      expose the full source via View Source — so a public live link was deliberately deferred.
-- [ ] **(Deferred) Public live link.** If/when an open demo is worth more than visibility:
-      flip the repo to public and enable GitHub Pages, OR use tiiny.host / email the HTML.
+- [x] **Published LIVE via GitHub Pages (2026-06-09).** Account `jryck`; `gh` CLI installed
+      + authenticated. Repo is now PUBLIC: https://github.com/jryck/ai-dividend-fund
+      Live tool: https://jryck.github.io/ai-dividend-fund/
+      (`index.html` is a redirect to `ai_endowment_tool.html` so the root URL is clean.)
+      Decision history: started private, then switched to public live after seeing a peer
+      (windfalltrust.github.io/ai-shock) do the same. Source is publicly viewable — accepted.
+      To UN-publish later: disable Pages and/or flip repo back to private.
+- [ ] **Competitive/naming check:** a GitHub org named `windfalltrust` runs an "AI Shock
+      Fiscal Simulator" — possible name clash with the intended "Windfall" product. Investigate.
 
 ## Ideas not yet built (offered)
 - Record displacement scenario settings inside the CSV exports.
