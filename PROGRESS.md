@@ -42,18 +42,14 @@ There's a Desktop shortcut ("AI Fund Simulator") that opens the tool.
   (Disp↔AI negative) is the worst case for the fund.
 
 ## OPEN / NEXT STEPS
-- [ ] **Publish to GitHub (public, with Pages live link).** Status: local git repo is
-      initialized and committed (the displacement feature + collapsible panel may be
-      uncommitted). User has NO GitHub account yet. The `gh` CLI installer was
-      downloaded to `~/Downloads/gh_install.pkg`.
-      Remaining manual steps for the user:
-        1. Create a free account at https://github.com/signup
-        2. Install gh: double-click `~/Downloads/gh_install.pkg`
-        3. Log in: `gh auth login --web --git-protocol https --hostname github.com`
-      Then Claude can: commit pending changes, create the public repo, push, and
-      enable GitHub Pages for the live URL.
-      (Alternative if GitHub feels heavy: a drag-and-drop host like tiiny.host for a
-      60-second shareable link, or just email/AirDrop the self-contained HTML file.)
+- [x] **Backed up to GitHub as a PRIVATE repo (2026-06-09).** Account `jryck` created,
+      `gh` CLI installed + authenticated, all changes committed and pushed.
+      Repo: https://github.com/jryck/ai-dividend-fund (private — not on the public web).
+      Decision: kept PRIVATE because the tool may become a product ("Windfall"). Note that
+      because the tool is a self-contained client-side HTML file, ANY live web link would
+      expose the full source via View Source — so a public live link was deliberately deferred.
+- [ ] **(Deferred) Public live link.** If/when an open demo is worth more than visibility:
+      flip the repo to public and enable GitHub Pages, OR use tiiny.host / email the HTML.
 
 ## Ideas not yet built (offered)
 - Record displacement scenario settings inside the CSV exports.
