@@ -230,6 +230,29 @@ const DEMAND_PRESETS={
   "Hardship":  {dSens:0.30, dCorrAI:-0.10,dCorrReal:-0.70,dTrend:0},
   "Backlash":  {dSens:0.30, dCorrAI:-0.60,dCorrReal:-0.40,dTrend:0.05},
 };
+// Plain-language explanation shown under the scenario dropdown.
+// "Displacement" = how much AI is disrupting jobs/the economy; higher displacement
+// raises demand for the fund's payouts (the demand multiplier scales distributions).
+const DEMAND_PRESET_DESC={
+  "Off":
+    "<b>Off (baseline).</b> Payouts ignore AI displacement — distributions follow the "
+    +"normal spending rule only. All displacement settings are zero.",
+  "AI-driven":
+    "<b>AI-driven (self-hedged).</b> Need for payouts rises when AI does well — and so "
+    +"does the fund's AI bucket. The fund tends to have the most to give exactly when "
+    +"demand is highest, which cushions the downside.",
+  "Hardship":
+    "<b>Hardship (broad downturn).</b> Need for payouts rises when the <i>real economy</i> "
+    +"struggles, largely regardless of AI. Demand spikes in recessions — so the fund pays "
+    +"out more when its Real-Economy bucket is weak.",
+  "Backlash":
+    "<b>Backlash (worst case).</b> A regulatory/social backlash: payout demand rises as AI "
+    +"returns <i>fall</i>, and creeps higher over time. The fund must distribute more "
+    +"precisely when its AI holdings are hurting — the hardest case to fund.",
+  "Custom":
+    "<b>Custom.</b> Your own settings — tune the displacement knobs below to build a "
+    +"scenario by hand.",
+};
 const SIM_OPTS = {
   explorerSims:[{v:2000,t:"2,000 (fastest)"},{v:5000,t:"5,000"},{v:10000,t:"10,000 (default)"},{v:25000,t:"25,000 (slow)"}],
   sweepSims:[{v:1000,t:"1,000 (fast)"},{v:2000,t:"2,000 (default)"},{v:5000,t:"5,000 (slow)"}],
@@ -448,8 +471,12 @@ function buildControls(){
       const sel=document.createElement("select"); sel.id="demandPreset";
       ["Off","AI-driven","Hardship","Backlash","Custom"].forEach(n=>{
         const op=document.createElement("option"); op.value=n; op.textContent=n; sel.appendChild(op);});
-      sel.addEventListener("change",()=>applyDemandPreset(sel.value));
-      w.appendChild(sel); body.appendChild(w);
+      sel.addEventListener("change",()=>{applyDemandPreset(sel.value); setDemandDesc(sel.value);});
+      w.appendChild(sel);
+      const desc=document.createElement("div"); desc.className="note"; desc.id="demandDesc";
+      desc.style.marginTop="6px"; w.appendChild(desc);
+      body.appendChild(w);
+      setDemandDesc(sel.value);
     }
     g.fields.forEach(f=>{
       const wrap=document.createElement("div"); wrap.className="field";
@@ -465,7 +492,7 @@ function buildControls(){
         state[f.key]=parseFloat(range.value);
         document.getElementById("v_"+f.key).textContent=fmtVal(f,state[f.key]);
         if(g.allocReadout)updateAllocReadout();
-        if(g.displaceGroup){const dp=document.getElementById("demandPreset"); if(dp)dp.value="Custom";}
+        if(g.displaceGroup){const dp=document.getElementById("demandPreset"); if(dp){dp.value="Custom";setDemandDesc("Custom");}}
         scheduleExplorer();
       });
     });
@@ -519,8 +546,13 @@ function resetDefaults(){
     document.getElementById("r_"+f.key).value=f.def;
     document.getElementById("v_"+f.key).textContent=fmtVal(f,f.def);
   }));
-  const dp=document.getElementById("demandPreset"); if(dp)dp.value="Off";
+  const dp=document.getElementById("demandPreset"); if(dp){dp.value="Off";setDemandDesc("Off");}
   updateAllocReadout(); runExplorer();
+}
+// Show the plain-language explanation for the selected scenario.
+function setDemandDesc(name){
+  const el=document.getElementById("demandDesc"); if(!el)return;
+  el.innerHTML=DEMAND_PRESET_DESC[name]||DEMAND_PRESET_DESC["Custom"];
 }
 // Apply a demand preset: set the displacement knobs and sync their sliders.
 function applyDemandPreset(name){
