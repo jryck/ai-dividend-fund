@@ -54,8 +54,8 @@ There's a Desktop shortcut ("AI Fund Simulator") that opens the tool.
 This tool is being built FOR the **Windfall Trust** (the client — the org behind the
 `ai-shock` simulator). It is NOT the user's own product and should NOT be branded "Windfall."
 Name it descriptively, e.g. "AI Dividend Fund Monte Carlo Simulation."
-- [ ] **Open question:** should the deliverable eventually live under the client's
-      `windfalltrust` GitHub org rather than the user's personal `jryck` account?
+- **Decision (2026-06-09):** keep the repo on the user's personal `jryck` account for now.
+  (Revisit moving it to the client's `windfalltrust` org only if/when handing over ownership.)
 
 ## Ideas not yet built (offered)
 - Record displacement scenario settings inside the CSV exports.
