@@ -76,6 +76,16 @@
   #sweepStatus{color:var(--muted);font-size:12.5px;margin-left:10px}
   #refEditor input{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:3px 6px;font-size:12px}
   #refEditor table th,#refEditor table td{padding:4px 6px}
+  /* ---- plain-English headline ---- */
+  .headline{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:10px;padding:12px 15px;margin-bottom:14px;font-size:14px;line-height:1.55;color:var(--ink)}
+  .headline b{color:var(--accent);font-variant-numeric:tabular-nums;font-weight:700}
+  .headline .warn{color:var(--accent2)}
+  /* ---- per-slider help ---- */
+  .help-icon{cursor:pointer;color:var(--muted);font-size:11px;opacity:.7;user-select:none;margin-left:3px}
+  .help-icon:hover{opacity:1;color:var(--accent)}
+  .field-help{font-size:11px;color:var(--muted);margin:1px 0 3px;line-height:1.4}
+  .toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   /* ---- mobile / narrow screens ---- */
   @media (max-width:760px){
     .layout{flex-direction:column}
@@ -106,7 +116,9 @@
 
     <!-- EXPLORER -->
     <section id="explorer">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <div class="headline" id="headline"></div>
+      <div class="toolbar">
+        <button class="btn ghost" style="width:auto;padding:6px 13px" id="shareBtn">🔗 Copy share link</button>
         <button class="btn ghost" style="width:auto;padding:6px 13px" id="dlProj">⬇ Download projection (Excel/CSV)</button>
       </div>
       <div class="cards" id="statCards"></div>
@@ -186,41 +198,64 @@
    ========================================================================= */
 const GROUPS = [
   {title:"Allocation (target weights)", keepOpen:true, fields:[
-    {key:"wAI",   label:"AI bucket",      min:0, max:100, step:1, def:40, unit:"%"},
-    {key:"wRes",  label:"Reserve bucket", min:0, max:100, step:1, def:20, unit:"%"},
+    {key:"wAI",   label:"AI bucket",      min:0, max:100, step:1, def:40, unit:"%",
+      help:"Share of the fund invested in the AI bucket — high-growth, high-volatility AI-exposed assets."},
+    {key:"wRes",  label:"Reserve bucket", min:0, max:100, step:1, def:20, unit:"%",
+      help:"Share held in the Reserve bucket (cash-like, low risk). The Real-Economy bucket gets whatever is left over."},
   ], allocReadout:true},
   {title:"Market assumptions", fields:[
-    {key:"mAI",  label:"AI — mean return",   min:0,  max:30, step:0.5, def:13, unit:"%"},
-    {key:"vAI",  label:"AI — volatility",    min:1,  max:60, step:0.5, def:30, unit:"%"},
-    {key:"mReal",label:"Real — mean return", min:0,  max:20, step:0.5, def:7,  unit:"%"},
-    {key:"vReal",label:"Real — volatility",  min:1,  max:40, step:0.5, def:13, unit:"%"},
-    {key:"mRes", label:"Reserve — mean",     min:0,  max:10, step:0.25,def:2,  unit:"%"},
-    {key:"vRes", label:"Reserve — volatility",min:0.5,max:15,step:0.25,def:2,  unit:"%"},
+    {key:"mAI",  label:"AI — mean return",   min:0,  max:30, step:0.5, def:13, unit:"%",
+      help:"Expected average annual return of the AI bucket, before volatility."},
+    {key:"vAI",  label:"AI — volatility",    min:1,  max:60, step:0.5, def:30, unit:"%",
+      help:"Volatility (year-to-year swing) of the AI bucket. Higher = bumpier ride."},
+    {key:"mReal",label:"Real — mean return", min:0,  max:20, step:0.5, def:7,  unit:"%",
+      help:"Expected average annual return of the Real-Economy bucket (broad equities/economy)."},
+    {key:"vReal",label:"Real — volatility",  min:1,  max:40, step:0.5, def:13, unit:"%",
+      help:"Volatility of the Real-Economy bucket."},
+    {key:"mRes", label:"Reserve — mean",     min:0,  max:10, step:0.25,def:2,  unit:"%",
+      help:"Expected average annual return of the Reserve bucket (cash-like)."},
+    {key:"vRes", label:"Reserve — volatility",min:0.5,max:15,step:0.25,def:2,  unit:"%",
+      help:"Volatility of the Reserve bucket — usually very low."},
   ]},
   {title:"Correlations", fields:[
-    {key:"cAR", label:"AI ↔ Real",     min:-1, max:1, step:0.05, def:0.45, unit:""},
-    {key:"cAS", label:"AI ↔ Reserve",  min:-1, max:1, step:0.05, def:0.00, unit:""},
-    {key:"cRS", label:"Real ↔ Reserve",min:-1, max:1, step:0.05, def:0.10, unit:""},
+    {key:"cAR", label:"AI ↔ Real",     min:-1, max:1, step:0.05, def:0.45, unit:"",
+      help:"How much AI and Real-Economy returns move together. +1 = lockstep, 0 = independent, −1 = opposite."},
+    {key:"cAS", label:"AI ↔ Reserve",  min:-1, max:1, step:0.05, def:0.00, unit:"",
+      help:"Co-movement between AI and Reserve returns."},
+    {key:"cRS", label:"Real ↔ Reserve",min:-1, max:1, step:0.05, def:0.10, unit:"",
+      help:"Co-movement between Real-Economy and Reserve returns."},
   ]},
   {title:"Endowment terms", fields:[
-    {key:"corpus",  label:"Starting corpus", min:0.5, max:50, step:0.5, def:5,  unit:"$B"},
-    {key:"horizon", label:"Time horizon",    min:5,   max:50, step:1,   def:25, unit:"yr"},
+    {key:"corpus",  label:"Starting corpus", min:0.5, max:50, step:0.5, def:5,  unit:"$B",
+      help:"Starting size of the endowment, in billions of dollars."},
+    {key:"horizon", label:"Time horizon",    min:5,   max:50, step:1,   def:25, unit:"yr",
+      help:"How many years each simulated future runs for."},
   ]},
   {title:"Spending rule", fields:[
-    {key:"baseRate", label:"Base spend rate", min:0, max:8,  step:0.1,  def:2.5, unit:"%"},
-    {key:"smoothing",label:"Smoothing weight",min:0, max:0.95,step:0.05,def:0.70,unit:""},
+    {key:"baseRate", label:"Base spend rate", min:0, max:8,  step:0.1,  def:2.5, unit:"%",
+      help:"Target yearly spending as a percent of the corpus (e.g. 2.5%)."},
+    {key:"smoothing",label:"Smoothing weight",min:0, max:0.95,step:0.05,def:0.70,unit:"",
+      help:"How much each year's payout leans on last year's (Yale-style smoothing). Higher = steadier, slower-adjusting payouts."},
   ]},
   {title:"Other", fields:[
-    {key:"inflation",label:"Inflation",   min:0, max:6, step:0.25, def:0, unit:"%"},
-    {key:"fee",      label:"Annual fee",  min:0, max:2, step:0.05, def:0, unit:"%"},
+    {key:"inflation",label:"Inflation",   min:0, max:6, step:0.25, def:0, unit:"%",
+      help:"Annual inflation, used to convert the corpus into real (today's) dollars. Leave at 0 to view everything in nominal dollars."},
+    {key:"fee",      label:"Annual fee",  min:0, max:2, step:0.05, def:0, unit:"%",
+      help:"Annual management/operating fee skimmed from the corpus each year."},
   ]},
   {title:"Displacement &amp; demand (optional)", displaceGroup:true, fields:[
-    {key:"dSens",    label:"Demand sensitivity",     min:0,   max:1,   step:0.05, def:0,   unit:""},
-    {key:"dCorrAI",  label:"Displacement ↔ AI return",min:-0.9,max:0.9, step:0.05, def:0,   unit:""},
-    {key:"dCorrReal",label:"Displacement ↔ Real econ", min:-0.9,max:0.9, step:0.05, def:0,  unit:""},
-    {key:"dPersist", label:"Displacement persistence",min:0,   max:0.9, step:0.05, def:0.6, unit:""},
-    {key:"dTrend",   label:"Displacement trend/yr",   min:-0.2,max:0.2, step:0.02, def:0,   unit:""},
-    {key:"dCap",     label:"Max demand multiplier",   min:1,   max:4,   step:0.25, def:2,   unit:"x"},
+    {key:"dSens",    label:"Demand sensitivity",     min:0,   max:1,   step:0.05, def:0,   unit:"",
+      help:"How strongly payouts flex up or down with AI displacement. 0 = off; 0.30 means roughly ±30% in a typical year."},
+    {key:"dCorrAI",  label:"Displacement ↔ AI return",min:-0.9,max:0.9, step:0.05, def:0,   unit:"",
+      help:"Whether payout demand rises when AI returns rise (+) or fall (−)."},
+    {key:"dCorrReal",label:"Displacement ↔ Real econ", min:-0.9,max:0.9, step:0.05, def:0,  unit:"",
+      help:"Whether payout demand rises when the real economy rises (+) or falls (−)."},
+    {key:"dPersist", label:"Displacement persistence",min:0,   max:0.9, step:0.05, def:0.6, unit:"",
+      help:"How long a displacement shock lingers year to year. Higher = more persistent."},
+    {key:"dTrend",   label:"Displacement trend/yr",   min:-0.2,max:0.2, step:0.02, def:0,   unit:"",
+      help:"A steady yearly drift in displacement. Positive = need grows over time."},
+    {key:"dCap",     label:"Max demand multiplier",   min:1,   max:4,   step:0.25, def:2,   unit:"x",
+      help:"Ceiling on the demand multiplier — payouts can never exceed this multiple of plan, no matter how high displacement spikes."},
   ]},
 ];
 // Demand presets set the displacement knobs in one click (Custom leaves them alone).
@@ -482,12 +517,18 @@ function buildControls(){
       const wrap=document.createElement("div"); wrap.className="field";
       wrap.innerHTML=`
         <div class="row">
-          <label>${f.label}</label>
+          <label>${f.label}${f.help?` <span class="help-icon" title="${f.help}">ⓘ</span>`:""}</label>
           <span class="val" id="v_${f.key}">${fmtVal(f,state[f.key])}</span>
         </div>
+        ${f.help?`<div class="field-help" style="display:none">${f.help}</div>`:""}
         <input type="range" id="r_${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${state[f.key]}">`;
       body.appendChild(wrap);
-      const range=wrap.querySelector("input");
+      const hicon=wrap.querySelector(".help-icon");
+      if(hicon)hicon.addEventListener("click",()=>{
+        const fh=wrap.querySelector(".field-help");
+        fh.style.display=fh.style.display==="none"?"block":"none";
+      });
+      const range=wrap.querySelector('input[type=range]');
       range.addEventListener("input",()=>{
         state[f.key]=parseFloat(range.value);
         document.getElementById("v_"+f.key).textContent=fmtVal(f,state[f.key]);
@@ -626,6 +667,22 @@ function runExplorer(){
     {k:"Capital impairment",v:(cap*100).toFixed(0)+"%",s:"ending corpus below start (nominal)",bad:cap>0.20},
     {k:"Severe impairment",v:(sev*100).toFixed(0)+"%",s:"corpus drawdown >50% at some point",bad:sev>0.05},
   ],"riskCards");
+
+  // ---- plain-English headline ----
+  {
+    const w=weights();
+    const annual=pct(pt,.5)/B/years;           // avg $B/yr = median lifetime payout ÷ years
+    let risk;
+    if(cut<0.005) risk="Distributions are <b>almost never cut</b>.";
+    else risk=`Distributions get cut in roughly <b>1-in-${Math.max(2,Math.round(1/cut))}</b> futures `
+      +`<span class="warn">(${(cut*100).toFixed(0)}% of the time)</span>.`;
+    const deplClause = depl>0.01
+      ? ` It runs dry before ${years} years in <b class="warn">${(depl*100).toFixed(1)}%</b> of cases.` : "";
+    document.getElementById("headline").innerHTML=
+      `At <b>${(w[0]*100).toFixed(0)}% AI / ${(w[1]*100).toFixed(0)}% Real / ${(w[2]*100).toFixed(0)}% Reserve</b>, `
+      +`this fund keeps its real value in <b>${(preserve*100).toFixed(0)}%</b> of simulated futures `
+      +`and pays about <b>$${annual.toFixed(2)}B/yr</b> on average. ${risk}${deplClause}`;
+  }
 
   // fan bands for corpus (real)
   const qs=[.05,.25,.5,.75,.95];
@@ -1058,13 +1115,47 @@ document.getElementById("runSweep").addEventListener("click",runSweep);
 document.getElementById("riskMetric").addEventListener("change",drawRiskSurface);
 document.getElementById("dlGrid").addEventListener("click",downloadGrid);
 document.getElementById("dlProj").addEventListener("click",downloadProjection);
+
+/* =========================================================================
+   SHAREABLE SCENARIO LINKS  (settings packed into the URL)
+   ========================================================================= */
+function encodeConfig(){
+  const dp=document.getElementById("demandPreset");
+  const data={v:1, s:state, preset:dp?dp.value:"Off"};
+  return "#cfg="+encodeURIComponent(JSON.stringify(data));
+}
+function shareLink(){return location.origin+location.pathname+encodeConfig();}
+function applyConfigFromURL(){
+  const m=location.hash.match(/cfg=([^&]+)/);
+  if(!m)return;
+  try{
+    const data=JSON.parse(decodeURIComponent(m[1]));
+    if(data && data.s) Object.assign(state, data.s);   // load saved slider values
+    if(data && data.preset) window._pendingPreset=data.preset;
+  }catch(e){/* malformed link — ignore and use defaults */}
+}
+document.getElementById("shareBtn").addEventListener("click",async()=>{
+  const url=shareLink(), btn=document.getElementById("shareBtn");
+  try{
+    await navigator.clipboard.writeText(url);
+    const o=btn.textContent; btn.textContent="✓ Link copied!";
+    setTimeout(()=>btn.textContent=o,1600);
+  }catch(e){
+    window.prompt("Copy this link to share these exact settings:",url);
+  }
+});
 function drawCards(cards,elId){
   document.getElementById(elId||"statCards").innerHTML=cards.map(c=>
     `<div class="card"><div class="k">${c.k}</div>
      <div class="v" style="color:${c.good?'var(--good)':c.bad?'var(--bad)':'var(--ink)'}">${c.v}</div>
      <div class="s">${c.s}</div></div>`).join("");
 }
+applyConfigFromURL();      // load settings from a shared link, if present
 buildControls();
+if(window._pendingPreset){ // restore the scenario dropdown from a shared link
+  const dp=document.getElementById("demandPreset");
+  if(dp){dp.value=window._pendingPreset; setDemandDesc(window._pendingPreset);}
+}
 runExplorer();
 window.addEventListener("resize",()=>{clearTimeout(window._rsz);window._rsz=setTimeout(runExplorer,200);});
 </script>
