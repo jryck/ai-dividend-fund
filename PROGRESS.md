@@ -32,6 +32,21 @@ There's a Desktop shortcut ("AI Fund Simulator") that opens the tool.
   rises while AI falls). Presets: Off / AI-driven / Hardship / Backlash / Custom.
 - **Collapsible control panel:** left-side sections collapse/expand; only Allocation
   open by default.
+- **Responsive/mobile layout:** controls stack above the charts on narrow screens.
+- **Tier-1 UX (2026-06-09):**
+  - *Plain-English headline* at the top of Explorer — auto-generated sentence
+    (allocation, % preserving real value, ~$/yr payout, cut-frequency, depletion).
+  - *Per-slider help* — an ⓘ next to every slider; hover (desktop) or tap (mobile)
+    for a one-line plain explanation. Help text lives in each GROUPS field as `help`.
+  - *Shareable scenario links* — "Copy share link" packs all settings + scenario into
+    the URL (`#cfg=`); opening such a link auto-loads those exact sliders.
+  - *Scenario descriptions* under the displacement preset dropdown.
+
+## Tier-2 / Tier-3 ideas discussed (not yet built)
+- Tier 2: "bad first decade" sequence-risk stress test; a "what matters most" (tornado)
+  sensitivity view; a sources/calibration note for the default assumptions.
+- Tier 3: clearer real-vs-nominal handling (corpus shown real, payouts nominal, inflation
+  defaults to 0); optional simpler default landing (lead with one chart + headline).
 
 ## Key findings so far
 - ~25–35% AI / 55–65% Real / small Reserve is the sweet spot (high preservation +
