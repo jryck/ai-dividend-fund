@@ -178,6 +178,15 @@ def simulate_allocation(weights, gross):
                             dist_paths.std(axis=1) / dist_paths.mean(axis=1),
                             np.nan)
 
+    # "Cut" = a distribution that falls >25% below its prior peak, at any point
+    # (matches the HTML tool's distribution-cut metric).
+    hwm = np.full(N_SIMS, BASE_SPEND_RATE * STARTING_CORPUS)
+    was_cut = np.zeros(N_SIMS, dtype=bool)
+    for t in range(HORIZON_YEARS):
+        s = dist_paths[:, t]
+        was_cut |= (s < 0.75 * hwm)
+        hwm = np.maximum(hwm, s)
+
     return {
         "w_AI": w[0], "w_Real": w[1], "w_Reserve": w[2],
         # Terminal corpus, real terms ($B)
@@ -189,6 +198,7 @@ def simulate_allocation(weights, gross):
         # Sustainability
         "p_preserve":  np.mean(ending_real >= STARTING_CORPUS),   # keeps real value
         "p_depleted":  np.mean(ever_depleted),                    # ever ran dry
+        "p_cut":       np.mean(was_cut),                          # payout cut >25% below peak
         # Distributions over the fund's life ($B)
         "payout_med":  np.percentile(total_payout, 50) / 1e9,     # median lifetime
         "payout_p5":   np.percentile(total_payout, 5)  / 1e9,     # downside lifetime

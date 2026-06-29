@@ -58,6 +58,18 @@ corpus retention in up-markets. Engines still mirror each other.
 - [ ] Residual: the "Demand sensitivity" help still says "~±30% in a typical year" — smoothing
       damps the realized per-year swing well below that. Tighten wording (mechanism unchanged).
 
+## Paper figures (2026-06-29)
+- `paper_charts.py` — generates publication figures from the audited engine (imports
+  montecarlo.py). Saves vector PDF + PNG. Run: `python3 paper_charts.py`.
+- Added `p_cut` metric to montecarlo.py `simulate_allocation` (payout >25% below prior
+  peak — matches the HTML tool's distribution-cut definition).
+- **Fig 1 — Distribution stability vs. growth, by AI allocation** (`fig1_stability_vs_growth`):
+  x = P(cut distributions), y = median ending corpus (real $B); points at AI 0/30/50/100%.
+  Non-AI remainder held entirely in Real economy (Reserve 0%) so AI is the only variable.
+  Finding: 30% AI DOMINATES 0% (both higher corpus AND fewer cuts); beyond 30% it's a
+  stability-for-growth tradeoff (100% AI ≈ doubles corpus but cuts payouts ~48% of the time).
+- [ ] More paper figures to come (user building a set).
+
 ## Tier-2 / Tier-3 ideas discussed (not yet built)
 - Tier 2: "bad first decade" sequence-risk stress test; a "what matters most" (tornado)
   sensitivity view; a sources/calibration note for the default assumptions.
