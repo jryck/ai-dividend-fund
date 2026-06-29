@@ -15,6 +15,8 @@ Figure 1 — Distribution stability vs. growth, by AI allocation
     so AI allocation is the single dimension that varies.
 """
 
+import textwrap
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")                     # no display needed
@@ -24,6 +26,26 @@ from matplotlib.ticker import PercentFormatter
 import montecarlo as mc
 
 AI_LEVELS = [0, 30, 50, 100]              # AI allocation points to plot (percent)
+
+
+def apply_house_style():
+    """Consistent, white-paper-grade styling shared by every figure."""
+    plt.rcParams.update({
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"],
+        "font.size": 12,
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "axes.edgecolor": "#9aa5b1",
+        "axes.linewidth": 1.0,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.titlecolor": "#1a1a1a",
+        "axes.labelcolor": "#333333",
+        "xtick.color": "#333333",
+        "ytick.color": "#333333",
+        "axes.titlepad": 14,
+    })
 
 
 RESERVE = 0.25   # Reserve held constant at 25% where feasible
@@ -54,52 +76,48 @@ def fig1_stability_vs_growth(gross):
     ai = np.array([d["ai"] for d in rows])
     has_exception = any(abs(d["res"] - RESERVE) > 1e-9 for d in rows)
 
-    plt.rcParams.update({
-        "font.family": "sans-serif",
-        "font.size": 12,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-    })
-    fig, ax = plt.subplots(figsize=(8, 6), dpi=200)
+    apply_house_style()
+    fig, ax = plt.subplots(figsize=(8, 5.6), dpi=300)
 
-    # connecting path (shows the tradeoff as AI rises)
-    ax.plot(x, y, "-", color="#9fb0c0", lw=1.5, zorder=1)
+    # data points only (no connecting line); navy gradient deepens with AI weight
+    colors = plt.cm.Blues(0.45 + 0.50 * (ai / 100.0))
+    ax.scatter(x, y, s=240, c=colors, edgecolors="white", linewidths=1.8, zorder=3)
 
-    # colored points (purple -> yellow with AI, matching the tool's palette)
-    colors = plt.cm.viridis(ai / 100.0)
-    ax.scatter(x, y, s=170, c=colors, edgecolors="white", linewidths=1.5, zorder=3)
-
-    # label each point with its AI allocation (* marks the all-AI exception)
-    for d, xi, yi, a in zip(rows, x, y, ai):
+    # label each point (* marks the all-AI exception); keep the rightmost label inboard
+    xmax_idx = int(np.argmax(x))
+    for i, (d, xi, yi, a) in enumerate(zip(rows, x, y, ai)):
         star = "*" if abs(d["res"] - RESERVE) > 1e-9 else ""
+        dx, ha = (-14, "right") if i == xmax_idx else (14, "left")
         ax.annotate(f"{a}% AI{star}", (xi, yi),
-                    textcoords="offset points", xytext=(10, 10),
-                    fontsize=11, fontweight="bold", color="#2c3a49")
+                    textcoords="offset points", xytext=(dx, 13), ha=ha,
+                    fontsize=11.5, fontweight="bold", color="#1a1a1a")
 
-    ax.set_xlabel("Probability of cutting distributions\n(payout >25% below a prior peak)")
-    ax.set_ylabel("Median ending corpus  (real $B)")
-    ax.set_title("Distribution stability vs. growth, by AI allocation",
-                 fontsize=15, fontweight="bold", pad=12)
+    ax.set_title("Distribution Stability Versus Growth By AI Allocation",
+                 fontsize=15.5, fontweight="bold", pad=16)
+    ax.set_xlabel("Probability Of Cutting Distributions", fontsize=12.5, labelpad=11)
+    ax.set_ylabel("Median Ending Corpus (Real $B)", fontsize=12.5, labelpad=11)
 
     ax.xaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
     ax.yaxis.set_major_formatter(lambda v, _: f"${v:.0f}B")
-    ax.grid(True, color="#e6e9ee", lw=0.8)
+    ax.grid(True, axis="y", color="#e9ecf1", lw=1.0)
+    ax.grid(False, axis="x")
     ax.set_axisbelow(True)
+    ax.tick_params(length=4, color="#9aa5b1", labelsize=11)
+    ax.margins(x=0.22, y=0.24)
 
-    # a little breathing room around the points
-    ax.margins(x=0.18, y=0.18)
-
-    reserve_note = ("Reserve held at 25%; Real economy takes the rest"
-                    + (" (*100% AI is all-AI: Reserve 0%)." if has_exception else "."))
-    note = (f"$5B corpus · 25-yr horizon · 2.5% spend, 0.70 smoothing · "
-            f"{mc.N_SIMS:,} sims · {reserve_note}\n"
-            "Up-and-right = more growth but less stable payouts.")
-    fig.text(0.5, -0.02, note, ha="center", va="top",
-             fontsize=9, color="#6b7785")
+    reserve_note = ("Reserve is held at 25%; the Real-Economy bucket absorbs the remainder"
+                    + (" (*100% AI is the all-AI case, with 0% Reserve)."
+                       if has_exception else "."))
+    note = ('Note: A "cut" is an annual distribution more than 25% below its prior peak. '
+            f"Assumes a $5B corpus, 25-year horizon, a 2.5% spend rate with 0.70 smoothing, "
+            f"and {mc.N_SIMS:,} simulations. " + reserve_note)
+    fig.text(0.065, -0.01, "\n".join(textwrap.wrap(note, 96)),
+             ha="left", va="top", fontsize=8.5, color="#6b7785")
 
     fig.tight_layout()
     for ext in ("pdf", "png"):
-        fig.savefig(f"fig1_stability_vs_growth.{ext}", bbox_inches="tight")
+        fig.savefig(f"fig1_stability_vs_growth.{ext}",
+                    bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print("  saved fig1_stability_vs_growth.pdf / .png")
 
