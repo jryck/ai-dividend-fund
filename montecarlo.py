@@ -21,10 +21,12 @@ then compares allocations on the things an endowment actually cares about:
 
 Spending each year follows a smoothing rule (Yale-style):
 
-    distribution_t = smoothing * distribution_{t-1}
-                   + (1 - smoothing) * base_rate * market_value_t
+    distribution_t = smoothing * distribution_{t-1} * (1 + inflation)
+                   + (1 - smoothing) * base_rate * corpus_begin_of_year_t
 
-Smoothing keeps payouts steady even when markets swing.
+Smoothing keeps payouts steady even when markets swing. The prior distribution
+is escalated by inflation; the spend rate is applied to the corpus at the
+START of the year (before that year's return).
 
 HOW TO RUN
 ----------
@@ -135,6 +137,9 @@ def simulate_allocation(weights, gross):
     ever_depleted = np.zeros(N_SIMS, dtype=bool)
 
     for t in range(HORIZON_YEARS):
+        # Beginning-of-year corpus (before this year's return) — the spend base.
+        begin_total = V.sum(axis=1)
+
         # (a) Markets move.
         V = V * gross[:, t, :]
 
@@ -142,11 +147,12 @@ def simulate_allocation(weights, gross):
         if FEE_RATE > 0:
             V = V * (1.0 - FEE_RATE)
 
-        total = V.sum(axis=1)
+        total = V.sum(axis=1)   # end-of-year corpus — what we actually pay from
 
-        # (c) Smoothed spending target. Prior distribution may be inflated.
+        # (c) Smoothed spending target. Prior distribution may be inflated;
+        #     the spend rate applies to the BEGINNING-of-year corpus.
         target = (SMOOTHING * dist_prev * (1.0 + INFLATION)
-                  + (1.0 - SMOOTHING) * BASE_SPEND_RATE * total)
+                  + (1.0 - SMOOTHING) * BASE_SPEND_RATE * begin_total)
 
         # Can't spend more than exists.
         spend = np.minimum(target, total)

@@ -42,6 +42,22 @@ There's a Desktop shortcut ("AI Fund Simulator") that opens the tool.
     the URL (`#cfg=`); opening such a link auto-loads those exact sliders.
   - *Scenario descriptions* under the displacement preset dropdown.
 
+## Model audit + spending-rule change (2026-06-29)
+Audited the engine against stated assumptions. Core math verified correct (lognormal
+calibration, Yale smoothing structure, annual rebalancing, fees, deflation, common random
+numbers, displacement correlation solve). Confirmed intended spending rule with user:
+
+    spend(t) = 0.70 * spend(t-1) * (1 + inflation)
+             + 0.30 * (0.025 * corpus_BEGIN_of_year(t))     [* demand mult when displacement on]
+
+Decisions: KEEP inflation escalation on the smoothed term (standard Yale); spend rate now
+applies to the BEGINNING-of-year corpus (was end-of-year/post-return — more pro-cyclical).
+Changed in BOTH `ai_endowment_tool.html` (line ~438, `beginTotal`) and `montecarlo.py`
+(`begin_total`). This shifts results slightly: less pro-cyclical payouts, marginally more
+corpus retention in up-markets. Engines still mirror each other.
+- [ ] Residual: the "Demand sensitivity" help still says "~±30% in a typical year" — smoothing
+      damps the realized per-year swing well below that. Tighten wording (mechanism unchanged).
+
 ## Tier-2 / Tier-3 ideas discussed (not yet built)
 - Tier 2: "bad first decade" sequence-risk stress test; a "what matters most" (tornado)
   sensitivity view; a sources/calibration note for the default assumptions.

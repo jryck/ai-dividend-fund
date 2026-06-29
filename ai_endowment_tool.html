@@ -424,9 +424,10 @@ function simulate(weights, gross, disp, nSims, years, p, record){
     const base=s*years*3, dbase=s*years;
     for(let t=0;t<years;t++){
       const b=base+t*3;
+      const beginTotal=vA+vR+vS;                 // beginning-of-year corpus (before this year's return)
       vA*=gross[b]; vR*=gross[b+1]; vS*=gross[b+2];
       if(fee>0){vA*=feeMul; vR*=feeMul; vS*=feeMul;}
-      const total=vA+vR+vS;
+      const total=vA+vR+vS;                       // end-of-year corpus (after return & fee) — what we pay from
       // Demand multiplier from the persistent displacement state.
       let mult=1;
       if(dOn){
@@ -435,7 +436,8 @@ function simulate(weights, gross, disp, nSims, years, p, record){
         if(mult<dFloor)mult=dFloor; if(mult>dCap)mult=dCap;
       }
       if(record)multByYear[t][s]=mult;
-      let spend=sm*distPrev*(1+infl)+(1-sm)*baseRate*total*mult;
+      // Yale-style smoothing; spend rate applies to the BEGINNING-of-year corpus.
+      let spend=sm*distPrev*(1+infl)+(1-sm)*baseRate*beginTotal*mult;
       if(spend>total)spend=total;
       if(spend<0)spend=0;
       if(spend<distHWM){
