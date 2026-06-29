@@ -65,9 +65,10 @@ corpus retention in up-markets. Engines still mirror each other.
   peak — matches the HTML tool's distribution-cut definition).
 - **Fig 1 — Distribution stability vs. growth, by AI allocation** (`fig1_stability_vs_growth`):
   x = P(cut distributions), y = median ending corpus (real $B); points at AI 0/30/50/100%.
-  Non-AI remainder held entirely in Real economy (Reserve 0%) so AI is the only variable.
-  Finding: 30% AI DOMINATES 0% (both higher corpus AND fewer cuts); beyond 30% it's a
-  stability-for-growth tradeoff (100% AI ≈ doubles corpus but cuts payouts ~48% of the time).
+  Reserve held constant at 25%; Real economy takes the rest. 100% AI is the all-AI
+  exception (Reserve 0%, marked with * + footnote).
+  Finding: 0%→30% AI lifts median corpus ~45% (+$4.6B) with ~flat cut risk (8.6%→8.8%);
+  stability cost only kicks in past 30% (50% AI: 17.8% cut; 100% AI: $26B but 48% cut).
 - [ ] More paper figures to come (user building a set).
 
 ## Tier-2 / Tier-3 ideas discussed (not yet built)

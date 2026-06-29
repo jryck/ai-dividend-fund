@@ -26,24 +26,33 @@ import montecarlo as mc
 AI_LEVELS = [0, 30, 50, 100]              # AI allocation points to plot (percent)
 
 
+RESERVE = 0.25   # Reserve held constant at 25% where feasible
+
+
 def alloc_from_ai(ai_pct):
-    """AI / Real / Reserve weights: non-AI remainder all goes to Real economy."""
+    """AI / Real / Reserve weights. Reserve is held at 25% and Real economy
+    absorbs the rest. At very high AI the 25% Reserve cannot be held, so it
+    falls to 0 (the all-AI exception at 100%)."""
     ai = ai_pct / 100.0
-    return np.array([ai, 1.0 - ai, 0.0])
+    res = min(RESERVE, 1.0 - ai)        # 0.25 normally; 0 only when AI > 75%
+    real = 1.0 - ai - res
+    return np.array([ai, real, res])
 
 
 def fig1_stability_vs_growth(gross):
     rows = []
     for ai in AI_LEVELS:
-        r = mc.simulate_allocation(alloc_from_ai(ai), gross)
-        rows.append({"ai": ai, "p_cut": r["p_cut"], "end_med": r["end_med"]})
-        print(f"  AI {ai:3d}%   P(cut) = {r['p_cut']*100:5.1f}%   "
-              f"median ending corpus = ${r['end_med']:5.1f}B")
+        w = alloc_from_ai(ai)
+        r = mc.simulate_allocation(w, gross)
+        rows.append({"ai": ai, "res": w[2], "p_cut": r["p_cut"], "end_med": r["end_med"]})
+        print(f"  AI {ai:3d}%  Real {w[1]*100:3.0f}%  Reserve {w[2]*100:3.0f}%   "
+              f"P(cut) = {r['p_cut']*100:5.1f}%   median end = ${r['end_med']:5.1f}B")
 
     rows.sort(key=lambda d: d["ai"])
     x = np.array([d["p_cut"] for d in rows])
     y = np.array([d["end_med"] for d in rows])
     ai = np.array([d["ai"] for d in rows])
+    has_exception = any(abs(d["res"] - RESERVE) > 1e-9 for d in rows)
 
     plt.rcParams.update({
         "font.family": "sans-serif",
@@ -60,9 +69,10 @@ def fig1_stability_vs_growth(gross):
     colors = plt.cm.viridis(ai / 100.0)
     ax.scatter(x, y, s=170, c=colors, edgecolors="white", linewidths=1.5, zorder=3)
 
-    # label each point with its AI allocation
-    for xi, yi, a in zip(x, y, ai):
-        ax.annotate(f"{a}% AI", (xi, yi),
+    # label each point with its AI allocation (* marks the all-AI exception)
+    for d, xi, yi, a in zip(rows, x, y, ai):
+        star = "*" if abs(d["res"] - RESERVE) > 1e-9 else ""
+        ax.annotate(f"{a}% AI{star}", (xi, yi),
                     textcoords="offset points", xytext=(10, 10),
                     fontsize=11, fontweight="bold", color="#2c3a49")
 
@@ -79,8 +89,10 @@ def fig1_stability_vs_growth(gross):
     # a little breathing room around the points
     ax.margins(x=0.18, y=0.18)
 
+    reserve_note = ("Reserve held at 25%; Real economy takes the rest"
+                    + (" (*100% AI is all-AI: Reserve 0%)." if has_exception else "."))
     note = (f"$5B corpus · 25-yr horizon · 2.5% spend, 0.70 smoothing · "
-            f"{mc.N_SIMS:,} sims · non-AI held in Real economy (Reserve 0%).\n"
+            f"{mc.N_SIMS:,} sims · {reserve_note}\n"
             "Up-and-right = more growth but less stable payouts.")
     fig.text(0.5, -0.02, note, ha="center", va="top",
              fontsize=9, color="#6b7785")
