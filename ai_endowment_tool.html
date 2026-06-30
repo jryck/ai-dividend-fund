@@ -418,7 +418,7 @@ function simulate(weights, gross, disp, nSims, years, p, record){
   for(let s=0;s<nSims;s++){
     let vA=start*wA, vR=start*wR, vS=start*wS;
     let distPrev=baseRate*start, paySum=0, everDep=false;
-    let distHWM=baseRate*start, corpHWM=start, cut=false, sev=false, worstCut=0;
+    let distHWM=baseRate*start, cut=false, worstCut=0;
     let dLev=0;
     if(record)totByYear[0][s]=start;
     const base=s*years*3, dbase=s*years;
@@ -447,8 +447,6 @@ function simulate(weights, gross, disp, nSims, years, p, record){
       } else { distHWM=spend; }
       const rem=total-spend;
       if(rem<=0)everDep=true;
-      if(rem<0.5*corpHWM)sev=true;             // corpus drawdown >50% from peak
-      if(rem>corpHWM)corpHWM=rem;
       vA=rem*wA; vR=rem*wR; vS=rem*wS;
       distPrev=spend; paySum+=spend;
       if(record){ totByYear[t+1][s]=rem/Math.pow(1+infl,t+1); payByYear[t][s]=spend; }
@@ -458,8 +456,8 @@ function simulate(weights, gross, disp, nSims, years, p, record){
     payTot[s]=paySum;
     dep[s]=everDep?1:0;
     distCut[s]=cut?1:0;
-    capImp[s]=endNom<start?1:0;                 // nominal ending below starting
-    sevImp[s]=sev?1:0;
+    capImp[s]=termReal[s]<start?1:0;            // ending real corpus below starting
+    sevImp[s]=termReal[s]<0.5*start?1:0;        // ending real corpus below half of start
     maxCutDepth[s]=worstCut;                     // deepest payout dip below prior peak
   }
   return {termReal,payTot,dep,distCut,capImp,sevImp,maxCutDepth,totByYear,payByYear,multByYear};
@@ -666,8 +664,8 @@ function runExplorer(){
   drawCards([
     {k:"Cut distributions",v:(cut*100).toFixed(0)+"%",s:"payout falls >25% below its prior peak",bad:cut>0.20},
     {k:"Worst cut depth",v:(cutDepthMed*100).toFixed(0)+"%",s:"deepest payout dip, median path",bad:cutDepthMed>0.25},
-    {k:"Capital impairment",v:(cap*100).toFixed(0)+"%",s:"ending corpus below start (nominal)",bad:cap>0.20},
-    {k:"Severe impairment",v:(sev*100).toFixed(0)+"%",s:"corpus drawdown >50% at some point",bad:sev>0.05},
+    {k:"Capital impairment",v:(cap*100).toFixed(0)+"%",s:"ending real corpus below start",bad:cap>0.20},
+    {k:"Severe impairment",v:(sev*100).toFixed(0)+"%",s:"ending real corpus below 50% of start",bad:sev>0.05},
   ],"riskCards");
 
   // ---- plain-English headline ----
